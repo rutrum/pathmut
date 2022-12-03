@@ -3,10 +3,32 @@
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use std::env;
+use atty;
+use std::io::{self, Read};
 
 fn main() {
     let app = build_app();
-    let matches = app.get_matches();
+
+    let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
+
+    if atty::isnt(atty::Stream::Stdin) {
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+
+        let mut v = Vec::new();
+        handle.read_to_end(&mut v).unwrap();
+
+        let s = String::from_utf8(v)
+            .unwrap()
+            .to_string();
+
+        if !s.is_empty() {
+            args.push(s);
+        }
+    }
+
+    let matches = app.get_matches_from(args);
 
     let mut result: Option<&OsStr> = None;
 
@@ -43,6 +65,7 @@ fn build_app() -> Command {
             name_command(),
             parent_command(),
         ])
+        .arg_required_else_help(true)
 }
 
 fn ext_command() -> Command {
@@ -172,5 +195,25 @@ mod test {
             .assert()
             .success()
             .stdout("");
+    }
+
+    #[test]
+    fn from_stdin() {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(&["ext"])
+            .write_stdin("/my/path/file.txt")
+            .assert()
+            .success()
+            .stdout("txt\n");
+    }
+
+    #[test]
+    fn help_default() {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Print help information"));
     }
 }
