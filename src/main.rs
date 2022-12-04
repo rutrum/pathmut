@@ -1,7 +1,7 @@
 #![feature(path_file_prefix)]
 
 use clap::{crate_version, value_parser, parser::ValuesRef, Arg, ArgAction, Command};
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::env;
 use atty;
@@ -32,23 +32,31 @@ fn main() {
 
     let result = if let Some(matches) = matches.subcommand_matches("ext") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.extension().unwrap())
+        apply_to_paths(paths, |path| path.extension().unwrap().into())
 
     } else if let Some(matches) = matches.subcommand_matches("stem") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.file_stem().unwrap())
+        apply_to_paths(paths, |path| path.file_stem().unwrap().into())
 
     } else if let Some(matches) = matches.subcommand_matches("prefix") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.file_prefix().unwrap())
+        apply_to_paths(paths, |path| path.file_prefix().unwrap().into())
 
     } else if let Some(matches) = matches.subcommand_matches("name") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.file_name().unwrap())
+        apply_to_paths(paths, |path| path.file_name().unwrap().into())
 
     } else if let Some(matches) = matches.subcommand_matches("parent") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.parent().map(|p| p.as_os_str()).unwrap_or(OsStr::new("")))
+        apply_to_paths(paths, |path| path.parent().map(|p| p.as_os_str()).unwrap_or(OsStr::new("")).into())
+
+    } else if let Some(matches) = matches.subcommand_matches("rmext") {
+        let paths = matches.get_many::<PathBuf>("path").unwrap();
+        apply_to_paths(paths, |mut path| {
+            path.set_extension(OsStr::new(""));
+            path.as_os_str().into()
+        })
+
     } else {
         unreachable!()
     };
@@ -56,11 +64,11 @@ fn main() {
     println!("{}", result);
 }
 
-fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(&PathBuf) -> &OsStr) -> String {
+fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> String {
     let mut result = String::new();
     for path in paths {
-        let new = f(path).to_str();
-        result.extend(new);
+        let new = f(path.to_path_buf());
+        result.extend(new.to_str());
         result.push('\n');
     }
     result.trim().to_string()
@@ -76,6 +84,7 @@ fn build_app() -> Command {
             prefix_command(),
             name_command(),
             parent_command(),
+            rmext_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -108,6 +117,12 @@ fn name_command() -> Command {
 fn parent_command() -> Command {
     Command::new("parent")
         .about("Prints the path without the final file or directory.")
+        .arg(path_arg())
+}
+
+fn rmext_command() -> Command {
+    Command::new("rmext")
+        .about("Removes the extension from path.")
         .arg(path_arg())
 }
 
@@ -186,6 +201,16 @@ mod test {
             .assert()
             .success()
             .stdout("dir\n");
+    }
+
+    #[test]
+    fn rmext() {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(&["rmext", "/my/path/file.txt"])
+            .assert()
+            .success()
+            .stdout("/my/path/file\n");
     }
 
     #[test]
