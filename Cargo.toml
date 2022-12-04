@@ -1,6 +1,6 @@
 [package]
 name = "pathmut"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Rutrum <dave@rutrum.net>"]
 edition = "2021"
 license = "GPL-3.0"
