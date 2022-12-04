@@ -1,6 +1,6 @@
 #![feature(path_file_prefix)]
 
-use clap::{crate_version, value_parser, Arg, ArgAction, Command};
+use clap::{crate_version, value_parser, parser::ValuesRef, Arg, ArgAction, Command};
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::env;
@@ -30,28 +30,40 @@ fn main() {
 
     let matches = app.get_matches_from(args);
 
-    let mut result: Option<&OsStr> = None;
+    let result = if let Some(matches) = matches.subcommand_matches("ext") {
+        let paths = matches.get_many::<PathBuf>("path").unwrap();
+        apply_to_paths(paths, |path| path.extension().unwrap())
 
-    if let Some(matches) = matches.subcommand_matches("ext") {
-        let path: &PathBuf = matches.get_one("path").unwrap();
-        result = path.extension();
     } else if let Some(matches) = matches.subcommand_matches("stem") {
-        let path: &PathBuf = matches.get_one("path").unwrap();
-        result = path.file_stem();
-    } else if let Some(matches) = matches.subcommand_matches("prefix") {
-        let path: &PathBuf = matches.get_one("path").unwrap();
-        result = path.file_prefix();
-    } else if let Some(matches) = matches.subcommand_matches("name") {
-        let path: &PathBuf = matches.get_one("path").unwrap();
-        result = path.file_name();
-    } else if let Some(matches) = matches.subcommand_matches("parent") {
-        let path: &PathBuf = matches.get_one("path").unwrap();
-        result = path.parent().map(|x| x.as_os_str());
-    }
+        let paths = matches.get_many::<PathBuf>("path").unwrap();
+        apply_to_paths(paths, |path| path.file_stem().unwrap())
 
-    if let Some(s) = result {
-        println!("{}", s.to_str().unwrap());
+    } else if let Some(matches) = matches.subcommand_matches("prefix") {
+        let paths = matches.get_many::<PathBuf>("path").unwrap();
+        apply_to_paths(paths, |path| path.file_prefix().unwrap())
+
+    } else if let Some(matches) = matches.subcommand_matches("name") {
+        let paths = matches.get_many::<PathBuf>("path").unwrap();
+        apply_to_paths(paths, |path| path.file_name().unwrap())
+
+    } else if let Some(matches) = matches.subcommand_matches("parent") {
+        let paths = matches.get_many::<PathBuf>("path").unwrap();
+        apply_to_paths(paths, |path| path.parent().map(|p| p.as_os_str()).unwrap_or(OsStr::new("")))
+    } else {
+        unreachable!()
+    };
+
+    println!("{}", result);
+}
+
+fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(&PathBuf) -> &OsStr) -> String {
+    let mut result = String::new();
+    for path in paths {
+        let new = f(path).to_str();
+        result.extend(new);
+        result.push('\n');
     }
+    result.trim().to_string()
 }
 
 fn build_app() -> Command {
@@ -65,6 +77,7 @@ fn build_app() -> Command {
             name_command(),
             parent_command(),
         ])
+        .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
 }
 
@@ -101,7 +114,7 @@ fn parent_command() -> Command {
 fn path_arg() -> Arg {
     Arg::new("path")
         .required(true)
-        .action(ArgAction::Set)
+        .action(ArgAction::Append)
         .help("Path string to mutate.")
         .value_parser(value_parser!(PathBuf))
 }
@@ -194,7 +207,7 @@ mod test {
             .args(&["parent", "/"])
             .assert()
             .success()
-            .stdout("");
+            .stdout("\n");
     }
 
     #[test]
@@ -216,4 +229,33 @@ mod test {
             .failure()
             .stderr(predicate::str::contains("Print help information"));
     }
+
+    #[test]
+    fn multiple_paths() {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(&["ext", "file.txt", "another.png"])
+            .assert()
+            .success()
+            .stdout("txt\npng\n");
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(&["stem", "file.txt", "another.png"])
+            .assert()
+            .success()
+            .stdout("file\nanother\n");
+    }
+
+    /*
+    #[test]
+    fn piped_multiple_paths() {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(&["ext"])
+            .write_stdin("/my/path/file.txt\npicture.png")
+            .assert()
+            .success()
+            .stdout("txt\npng\n");
+    }
+    */
 }
