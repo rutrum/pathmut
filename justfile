@@ -8,3 +8,6 @@ watch:
 
 run *ARGS :
     cargo +nightly run -- {{ARGS}}
+
+dry-publish:
+    cargo +nightly publish --dry-run

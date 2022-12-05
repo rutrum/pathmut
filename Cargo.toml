@@ -1,12 +1,12 @@
 [package]
 name = "pathmut"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Rutrum <dave@rutrum.net>"]
 edition = "2021"
 license = "GPL-3.0"
-description = "Command line utility for extracting information from path strings"
+description = "Command line utility for extracting, removing, and replacing components from path strings"
 repository = "https://github.com/rutrum/pathmut"
-keywords = [ "path", "extension" ]
+keywords = [ "path", "extension", "file" ]
 categories = [ "text-processing", "command-line-utilities" ]
 readme = "README.md"
 

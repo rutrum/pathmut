@@ -5,17 +5,18 @@ This was made because I'm tired of resorting to `basename`, `dirname`, `cut -d. 
 Important to know this utility only works with path _strings_ and doesn't touch the file system whatsoever.
 
 ```
+$ pathmut
 Mutates path strings.
 
-Usage: pathmut [COMMAND]
+Usage: pathmut [COMPONENT|COMMAND]
 
-Commands:
-  ext     Prints file extension of file in the path.
-  stem    Prints file stem of file in the path.
-  prefix  Prints file prefix of file in the path.
-  name    Prints the name of the file or directory at the path.
-  parent  Prints the path without the final file or directory.
-  rmext   Removes the extension from path.
+Components/Commands:
+  ext     Read or update file extension
+  stem    Read or update file stem
+  prefix  Read or update file prefix
+  name    Read or update file name
+  parent  Read or update parent directory
+  first   Read or update first component
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -28,6 +29,12 @@ Options:
 This utility is really just a command line wrapper for [Rust's Path struct API](https://doc.rust-lang.org/stable/std/path/struct.Path.html).  Precise details on exactly how these commands work are found there.
 
 ## Changelog
+
+### v0.3.0
+
+* Add `first` command
+* Add `--remove` and `--replace` arguments for every command
+* Remove `rmext` command
 
 ### v0.2.0
 
