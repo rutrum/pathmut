@@ -95,11 +95,11 @@ pub mod remove {
         path.with_file_name(OsStr::new("")).into()
     }
 
-    /*
     pub fn parent(path: PathBuf) -> OsString {
-
+        path.file_name().unwrap_or_default().into()
     }
 
+    /*
     pub fn first(path: PathBuf) -> OsString {
         
     }
