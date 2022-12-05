@@ -57,6 +57,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Get, Parent) => apply_to_paths(paths, get::parent),
         (Get, First) => apply_to_paths(paths, get::first),
         (Remove, Extension) => apply_to_paths(paths, remove::ext),
+        (Remove, Stem) => apply_to_paths(paths, remove::stem),
         (Remove, Name) => apply_to_paths(paths, remove::name),
         _ => unreachable!(),
     }
@@ -165,6 +166,16 @@ mod test {
                 pathmut(&["ext", "--remove", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/file\n");
+            }
+
+            #[test]
+            fn stem() {
+                pathmut(&["stem", "--remove", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/txt\n");
+                pathmut(&["stem", "--remove", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("/my/path/gz\n");
             }
 
             #[test]
