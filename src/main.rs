@@ -96,7 +96,11 @@ fn main() {
 
     let result = if let Some(matches) = matches.subcommand_matches("ext") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, get::ext)
+        if matches.get_flag("remove") {
+            apply_to_paths(paths, remove::ext)
+        } else {
+            apply_to_paths(paths, get::ext)
+        }
 
     } else if let Some(matches) = matches.subcommand_matches("stem") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
@@ -113,10 +117,6 @@ fn main() {
     } else if let Some(matches) = matches.subcommand_matches("parent") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
         apply_to_paths(paths, get::parent)
-
-    } else if let Some(matches) = matches.subcommand_matches("rmext") {
-        let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, remove::ext)
 
     } else {
         unreachable!()
@@ -145,7 +145,6 @@ fn build_app() -> Command {
             prefix_command(),
             name_command(),
             parent_command(),
-            rmext_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -155,6 +154,7 @@ fn ext_command() -> Command {
     Command::new("ext")
         .about("Prints file extension of file in the path.")
         .arg(path_arg())
+        .arg(remove_arg())
 }
 
 fn stem_command() -> Command {
@@ -181,18 +181,20 @@ fn parent_command() -> Command {
         .arg(path_arg())
 }
 
-fn rmext_command() -> Command {
-    Command::new("rmext")
-        .about("Removes the extension from path.")
-        .arg(path_arg())
-}
-
 fn path_arg() -> Arg {
     Arg::new("path")
         .required(true)
         .action(ArgAction::Append)
         .help("Path string to mutate.")
         .value_parser(value_parser!(PathBuf))
+}
+
+fn remove_arg() -> Arg {
+    Arg::new("remove")
+        .short('r')
+        .long("remove")
+        .action(ArgAction::SetTrue)
+        .help("Remove component from path")
 }
 
 #[cfg(test)]
@@ -265,10 +267,10 @@ mod test {
     }
 
     #[test]
-    fn rmext() {
+    fn ext_remove() {
         Command::cargo_bin("pathmut")
             .unwrap()
-            .args(&["rmext", "/my/path/file.txt"])
+            .args(&["ext", "--remove", "/my/path/file.txt"])
             .assert()
             .success()
             .stdout("/my/path/file\n");
