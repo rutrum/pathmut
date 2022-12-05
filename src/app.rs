@@ -23,6 +23,7 @@ fn ext_command() -> Command {
         .about("Prints file extension of file in the path.")
         .arg(path_arg())
         .arg(remove_arg())
+        .arg(replace_arg())
 }
 
 fn stem_command() -> Command {
@@ -30,6 +31,7 @@ fn stem_command() -> Command {
         .about("Prints file stem of file in the path.")
         .arg(path_arg())
         .arg(remove_arg())
+        .arg(replace_arg())
 }
 
 fn prefix_command() -> Command {
@@ -37,6 +39,7 @@ fn prefix_command() -> Command {
         .about("Prints file prefix of file in the path.")
         .arg(path_arg())
         .arg(remove_arg())
+        .arg(replace_arg())
 }
 
 fn name_command() -> Command {
@@ -44,6 +47,7 @@ fn name_command() -> Command {
         .about("Prints the name of the file or directory at the path.")
         .arg(path_arg())
         .arg(remove_arg())
+        .arg(replace_arg())
 }
 
 fn parent_command() -> Command {
@@ -51,6 +55,7 @@ fn parent_command() -> Command {
         .about("Prints the path without the final file or directory.")
         .arg(path_arg())
         .arg(remove_arg())
+        .arg(replace_arg())
 }
 
 fn first_command() -> Command {
@@ -58,6 +63,7 @@ fn first_command() -> Command {
         .about("Prints the first component.")
         .arg(path_arg())
         .arg(remove_arg())
+        .arg(replace_arg())
 }
 
 fn path_arg() -> Arg {
@@ -74,5 +80,13 @@ fn remove_arg() -> Arg {
         .long("remove")
         .action(ArgAction::SetTrue)
         .help("Remove component from path")
+}
+
+fn replace_arg() -> Arg {
+    Arg::new("replacement")
+        .short('s')
+        .long("substitute")
+        .action(ArgAction::Set)
+        .help("Replace component in path")
 }
 

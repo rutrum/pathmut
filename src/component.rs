@@ -1,5 +1,5 @@
 use std::ffi::{OsString, OsStr};
-use std::path::{self, PathBuf};
+use std::path::PathBuf;
 
 pub enum Component {
     Extension,
@@ -31,7 +31,7 @@ impl TryFrom<&str> for Component {
 pub enum Action {
     Get,
     Remove,
-    //Replace,
+    Replace,
 }
 
 pub mod get {
@@ -71,6 +71,54 @@ pub mod get {
 }
 
 pub mod remove {
+    use super::*;
+
+    pub fn ext(path: PathBuf) -> OsString {
+        path.with_extension(OsStr::new("")).into()
+    }
+
+    pub fn stem(path: PathBuf) -> OsString {
+        if let Some(ext) = path.extension() {
+            path.with_file_name(ext).into()
+        } else {
+            path.with_file_name(OsStr::new("")).into()
+        }
+    }
+
+    pub fn prefix(path: PathBuf) -> OsString {
+        if let Some(name) = path.file_name() {
+            if let Some(prefix) = path.file_prefix() {
+                let after_prefix = name.to_str()
+                    .unwrap()
+                    .split(".")
+                    .skip_while(|&s| s == prefix.to_str().unwrap())
+                    .intersperse(".")
+                    .collect::<String>();
+                path.with_file_name(after_prefix).into()
+            } else {
+                path.into() // unreachable?
+            }
+        } else {
+            path.into()
+        }
+    }
+
+    pub fn name(path: PathBuf) -> OsString {
+        path.with_file_name(OsStr::new("")).into()
+    }
+
+    pub fn parent(path: PathBuf) -> OsString {
+        path.file_name().unwrap_or_default().into()
+    }
+
+    pub fn first(path: PathBuf) -> OsString {
+        let mut iter = path.components();
+        iter.next();
+        iter.as_path().into()
+    }
+}
+
+pub mod replace {
     use super::*;
 
     pub fn ext(path: PathBuf) -> OsString {

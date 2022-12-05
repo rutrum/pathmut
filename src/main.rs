@@ -62,7 +62,12 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Remove, Name) => apply_to_paths(paths, remove::name),
         (Remove, Parent) => apply_to_paths(paths, remove::parent),
         (Remove, First) => apply_to_paths(paths, remove::first),
-        _ => unreachable!(),
+        (Replace, Extension) => apply_to_paths(paths, replace::ext),
+        (Replace, Stem) => apply_to_paths(paths, replace::stem),
+        (Replace, Prefix) => apply_to_paths(paths, replace::prefix),
+        (Replace, Name) => apply_to_paths(paths, replace::name),
+        (Replace, Parent) => apply_to_paths(paths, replace::parent),
+        (Replace, First) => apply_to_paths(paths, replace::first),
     }
 }
 
