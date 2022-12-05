@@ -1,5 +1,5 @@
 use std::ffi::{OsString, OsStr};
-use std::path::PathBuf;
+use std::path::{self, PathBuf};
 
 pub enum Component {
     Extension,
@@ -85,11 +85,23 @@ pub mod remove {
         }
     }
 
-    /*
     pub fn prefix(path: PathBuf) -> OsString {
-        
+        if let Some(name) = path.file_name() {
+            if let Some(prefix) = path.file_prefix() {
+                let after_prefix = name.to_str()
+                    .unwrap()
+                    .split(".")
+                    .skip_while(|&s| s == prefix.to_str().unwrap())
+                    .intersperse(".")
+                    .collect::<String>();
+                path.with_file_name(after_prefix).into()
+            } else {
+                path.into() // unreachable?
+            }
+        } else {
+            path.into()
+        }
     }
-    */
 
     pub fn name(path: PathBuf) -> OsString {
         path.with_file_name(OsStr::new("")).into()

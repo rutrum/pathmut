@@ -58,6 +58,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Get, First) => apply_to_paths(paths, get::first),
         (Remove, Extension) => apply_to_paths(paths, remove::ext),
         (Remove, Stem) => apply_to_paths(paths, remove::stem),
+        (Remove, Prefix) => apply_to_paths(paths, remove::prefix),
         (Remove, Name) => apply_to_paths(paths, remove::name),
         (Remove, Parent) => apply_to_paths(paths, remove::parent),
         _ => unreachable!(),
@@ -177,6 +178,22 @@ mod test {
                 pathmut(&["stem", "--remove", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/gz\n");
+            }
+
+            #[test]
+            fn prefix() {
+                pathmut(&["prefix", "--remove", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("/my/path/tar.gz\n");
+                pathmut(&["prefix", "--remove", "/my/path/file"])
+                    .success()
+                    .stdout("/my/path/\n");
+                pathmut(&["prefix", "--remove", "/my"])
+                    .success()
+                    .stdout("/\n");
+                pathmut(&["prefix", "--remove", "/"])
+                    .success()
+                    .stdout("/\n");
             }
 
             #[test]

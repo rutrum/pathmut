@@ -1,4 +1,4 @@
-default: test
+default: run
 
 test:
     cargo +nightly test
@@ -6,5 +6,5 @@ test:
 watch:
     watchexec -c -w src -- just test
 
-run:
-    cargo +nightly run
+run *ARGS :
+    cargo +nightly run -- {{ARGS}}
