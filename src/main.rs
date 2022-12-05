@@ -67,6 +67,8 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
         (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
         (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
+        (Replace(s), Name) => apply_to_paths_replace(paths, s, replace::name),
+        (Replace(s), Parent) => apply_to_paths_replace(paths, s, replace::parent),
         _ => unreachable!(),
     }
 }
@@ -277,6 +279,32 @@ mod test {
                 pathmut(&["prefix", "--replace", "main", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/main.tar.gz\n");
+            }
+
+            #[test]
+            fn name() {
+                pathmut(&["name", "--replace", "main", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/main\n");
+                pathmut(&["name", "--replace", "main", "/my/path/"])
+                    .success()
+                    .stdout("/my/main\n");
+                pathmut(&["name", "--replace", "main", "/my/path"])
+                    .success()
+                    .stdout("/my/main\n");
+            }
+
+            #[test]
+            fn parent() {
+                pathmut(&["parent", "--replace", "new/dir", "/my/path/file.txt"])
+                    .success()
+                    .stdout("new/dir/file.txt\n");
+                pathmut(&["parent", "--replace", "/", "my/path/file.txt"])
+                    .success()
+                    .stdout("/file.txt\n");
+                pathmut(&["parent", "--replace", "new", "/my/path"])
+                    .success()
+                    .stdout("new/path\n");
             }
         }
     }

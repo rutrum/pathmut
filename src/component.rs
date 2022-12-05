@@ -154,6 +154,14 @@ pub mod replace {
             path.into()
         }
     }
+
+    pub fn name(path: PathBuf, s: &str) -> OsString {
+        path.with_file_name(s).into()
+    }
+
+    pub fn parent(path: PathBuf, s: &str) -> OsString {
+        PathBuf::from(s).join(path.file_name().unwrap_or_default()).into()
+    }
 }
 
 
