@@ -75,110 +75,79 @@ fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> Stri
 #[cfg(test)]
 mod test {
     use assert_cmd::Command;
+    use assert_cmd::assert::Assert;
     use predicates::prelude::*;
+
+    fn pathmut(args: &[&str]) -> Assert {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(args)
+            .assert()
+    }
 
     #[test]
     fn ext() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["ext", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["ext", "/my/path/file.txt"])
             .success()
             .stdout("txt\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["ext", "/my/path/file.tar.gz"])
-            .assert()
+        pathmut(&["ext", "/my/path/file.tar.gz"])
             .success()
             .stdout("gz\n");
     }
 
     #[test]
     fn stem() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["stem", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["stem", "/my/path/file.txt"])
             .success()
             .stdout("file\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["stem", "/my/path/file.tar.gz"])
-            .assert()
+        pathmut(&["stem", "/my/path/file.tar.gz"])
             .success()
             .stdout("file.tar\n");
     }
 
     #[test]
     fn prefix() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["prefix", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["prefix", "/my/path/file.txt"])
             .success()
             .stdout("file\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["prefix", "/my/path/file.tar.gz"])
-            .assert()
+        pathmut(&["prefix", "/my/path/file.tar.gz"])
             .success()
             .stdout("file\n");
     }
 
     #[test]
     fn name() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["name", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["name", "/my/path/file.txt"])
             .success()
             .stdout("file.txt\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["name", "/my/path/dir"])
-            .assert()
+        pathmut(&["name", "/my/path/dir"])
             .success()
             .stdout("dir\n");
     }
 
     #[test]
     fn name_remove() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["name", "--remove", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["name", "--remove", "/my/path/file.txt"])
             .success()
             .stdout("/my/path/\n");
     }
 
     #[test]
     fn ext_remove() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["ext", "--remove", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["ext", "--remove", "/my/path/file.txt"])
             .success()
             .stdout("/my/path/file\n");
     }
 
     #[test]
     fn parent() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["parent", "/my/path/file.txt"])
-            .assert()
+        pathmut(&["parent", "/my/path/file.txt"])
             .success()
             .stdout("/my/path\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["parent", "/my/path/dir"])
-            .assert()
+        pathmut(&["parent", "/my/path/dir"])
             .success()
             .stdout("/my/path\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["parent", "/"])
-            .assert()
+        pathmut(&["parent", "/"])
             .success()
             .stdout("\n");
     }
@@ -196,25 +165,17 @@ mod test {
 
     #[test]
     fn help_default() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .assert()
+        pathmut(&[])
             .failure()
             .stderr(predicate::str::contains("Print help information"));
     }
 
     #[test]
     fn multiple_paths() {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["ext", "file.txt", "another.png"])
-            .assert()
+        pathmut(&["ext", "file.txt", "another.png"])
             .success()
             .stdout("txt\npng\n");
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(&["stem", "file.txt", "another.png"])
-            .assert()
+        pathmut(&["stem", "file.txt", "another.png"])
             .success()
             .stdout("file\nanother\n");
     }
