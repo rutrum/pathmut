@@ -162,6 +162,11 @@ pub mod replace {
     pub fn parent(path: PathBuf, s: &str) -> OsString {
         PathBuf::from(s).join(path.file_name().unwrap_or_default()).into()
     }
+
+    pub fn first(path: PathBuf, s: &str) -> OsString {
+        let mut iter = path.components();
+        iter.next();
+        let after_first = iter.as_path();
+        PathBuf::from(s).join(after_first).into()
+    }
 }
-
-

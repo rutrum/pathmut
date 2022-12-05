@@ -69,7 +69,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
         (Replace(s), Name) => apply_to_paths_replace(paths, s, replace::name),
         (Replace(s), Parent) => apply_to_paths_replace(paths, s, replace::parent),
-        _ => unreachable!(),
+        (Replace(s), First) => apply_to_paths_replace(paths, s, replace::first),
     }
 }
 
@@ -305,6 +305,19 @@ mod test {
                 pathmut(&["parent", "--replace", "new", "/my/path"])
                     .success()
                     .stdout("new/path\n");
+            }
+
+            #[test]
+            fn first() {
+                pathmut(&["first", "--replace", "new/dir", "/my/path/file.txt"])
+                    .success()
+                    .stdout("new/dir/my/path/file.txt\n");
+                pathmut(&["first", "--replace", "new/dir", "my/path/file.txt"])
+                    .success()
+                    .stdout("new/dir/path/file.txt\n");
+                pathmut(&["first", "--replace", "/", "my/path/file.txt"])
+                    .success()
+                    .stdout("/path/file.txt\n");
             }
         }
     }
