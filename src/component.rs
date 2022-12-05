@@ -1,6 +1,6 @@
-use std::ffi::{OsString, OsStr};
-use std::path::PathBuf;
+use std::ffi::{OsStr, OsString};
 use std::iter;
+use std::path::PathBuf;
 
 pub enum Component {
     Extension,
@@ -62,9 +62,7 @@ pub mod get {
     }
 
     pub fn first(path: PathBuf) -> OsString {
-        match path.ancestors()
-            .filter(|&x| x.as_os_str().len() > 0)
-            .last() {
+        match path.ancestors().filter(|&x| !x.as_os_str().is_empty()).last() {
             Some(path) => path.into(),
             None => OsString::new(),
         }
@@ -89,9 +87,10 @@ pub mod remove {
     pub fn prefix(path: PathBuf) -> OsString {
         if let Some(name) = path.file_name() {
             if let Some(prefix) = path.file_prefix() {
-                let after_prefix = name.to_str()
+                let after_prefix = name
+                    .to_str()
                     .unwrap()
-                    .split(".")
+                    .split('.')
                     .skip_while(|&s| s == prefix.to_str().unwrap())
                     .intersperse(".")
                     .collect::<String>();
@@ -139,11 +138,13 @@ pub mod replace {
         if let Some(name) = path.file_name() {
             if let Some(prefix) = path.file_prefix() {
                 iter::once(s);
-                let after_prefix = iter::once(s).chain(
-                    name.to_str()
-                        .unwrap()
-                        .split(".")
-                        .skip_while(|&s| s == prefix.to_str().unwrap()))
+                let after_prefix = iter::once(s)
+                    .chain(
+                        name.to_str()
+                            .unwrap()
+                            .split('.')
+                            .skip_while(|&s| s == prefix.to_str().unwrap()),
+                    )
                     .intersperse(".")
                     .collect::<String>();
                 path.with_file_name(after_prefix).into()
@@ -160,7 +161,9 @@ pub mod replace {
     }
 
     pub fn parent(path: PathBuf, s: &str) -> OsString {
-        PathBuf::from(s).join(path.file_name().unwrap_or_default()).into()
+        PathBuf::from(s)
+            .join(path.file_name().unwrap_or_default())
+            .into()
     }
 
     pub fn first(path: PathBuf, s: &str) -> OsString {

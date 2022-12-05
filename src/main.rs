@@ -1,9 +1,8 @@
 use clap::parser::ValuesRef;
-use std::ffi::{OsString};
-use std::path::PathBuf;
 use std::env;
-use atty;
+use std::ffi::OsString;
 use std::io::{self, Read};
+use std::path::PathBuf;
 
 use pathmut::*;
 
@@ -19,9 +18,7 @@ fn main() {
         let mut v = Vec::new();
         handle.read_to_end(&mut v).unwrap();
 
-        let s = String::from_utf8(v)
-            .unwrap()
-            .to_string();
+        let s = String::from_utf8(v).unwrap();
 
         if !s.is_empty() {
             args.push(s);
@@ -48,8 +45,8 @@ fn main() {
 }
 
 fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf>) -> String {
-    use Component::*;
     use Action::*;
+    use Component::*;
 
     match (action, comp) {
         (Get, Extension) => apply_to_paths(paths, get::ext),
@@ -83,7 +80,11 @@ fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> Stri
     result.trim().to_string()
 }
 
-fn apply_to_paths_replace(paths: ValuesRef<PathBuf>, s: &str, f: fn(PathBuf, &str) -> OsString) -> String {
+fn apply_to_paths_replace(
+    paths: ValuesRef<PathBuf>,
+    s: &str,
+    f: fn(PathBuf, &str) -> OsString,
+) -> String {
     let mut result = String::new();
     for path in paths {
         let new = f(path.to_path_buf(), s);
@@ -95,15 +96,12 @@ fn apply_to_paths_replace(paths: ValuesRef<PathBuf>, s: &str, f: fn(PathBuf, &st
 
 #[cfg(test)]
 mod test {
-    use assert_cmd::Command;
     use assert_cmd::assert::Assert;
+    use assert_cmd::Command;
     use predicates::prelude::*;
 
     fn pathmut(args: &[&str]) -> Assert {
-        Command::cargo_bin("pathmut")
-            .unwrap()
-            .args(args)
-            .assert()
+        Command::cargo_bin("pathmut").unwrap().args(args).assert()
     }
 
     mod component {
@@ -146,9 +144,7 @@ mod test {
                 pathmut(&["name", "/my/path/file.txt"])
                     .success()
                     .stdout("file.txt\n");
-                pathmut(&["name", "/my/path/dir"])
-                    .success()
-                    .stdout("dir\n");
+                pathmut(&["name", "/my/path/dir"]).success().stdout("dir\n");
             }
 
             #[test]
@@ -159,16 +155,12 @@ mod test {
                 pathmut(&["parent", "/my/path/dir"])
                     .success()
                     .stdout("/my/path\n");
-                pathmut(&["parent", "/"])
-                    .success()
-                    .stdout("\n");
+                pathmut(&["parent", "/"]).success().stdout("\n");
             }
 
             #[test]
             fn first() {
-                pathmut(&["first", "/"])
-                    .success()
-                    .stdout("/\n");
+                pathmut(&["first", "/"]).success().stdout("/\n");
                 pathmut(&["first", "/my/path/file.txt"])
                     .success()
                     .stdout("/\n");
@@ -322,7 +314,6 @@ mod test {
         }
     }
 
-
     #[test]
     fn from_stdin() {
         Command::cargo_bin("pathmut")
@@ -353,8 +344,7 @@ mod test {
 
     #[test]
     fn no_multiple_actions() {
-        pathmut(&["ext", "--remove", "--replace", "a", "file.txt"])
-            .failure();
+        pathmut(&["ext", "--remove", "--replace", "a", "file.txt"]).failure();
     }
 
     /*

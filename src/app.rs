@@ -1,4 +1,4 @@
-use clap::{ArgGroup, value_parser, crate_version, ArgAction, Command, Arg};
+use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 
 use std::path::PathBuf;
 
@@ -63,7 +63,7 @@ fn first_command() -> Command {
 }
 
 fn component_args() -> [Arg; 3] {
-    [ path_arg(), remove_arg(), replace_arg() ]
+    [path_arg(), remove_arg(), replace_arg()]
 }
 
 fn path_arg() -> Arg {
@@ -91,4 +91,3 @@ fn replace_arg() -> Arg {
         .help("Replace component in path")
         .conflicts_with("remove")
 }
-
