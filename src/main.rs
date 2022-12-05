@@ -61,6 +61,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Remove, Prefix) => apply_to_paths(paths, remove::prefix),
         (Remove, Name) => apply_to_paths(paths, remove::name),
         (Remove, Parent) => apply_to_paths(paths, remove::parent),
+        (Remove, First) => apply_to_paths(paths, remove::first),
         _ => unreachable!(),
     }
 }
@@ -215,6 +216,20 @@ mod test {
                     .success()
                     .stdout("path\n");
             }
+
+            #[test]
+            fn first() {
+                pathmut(&["first", "--remove", "/my/path/file.txt"])
+                    .success()
+                    .stdout("my/path/file.txt\n");
+                pathmut(&["first", "--remove", "my/path/file.txt"])
+                    .success()
+                    .stdout("path/file.txt\n");
+                pathmut(&["first", "--remove", "file.txt"])
+                    .success()
+                    .stdout("\n");
+            }
+
         }
     }
 

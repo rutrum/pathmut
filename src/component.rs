@@ -111,11 +111,11 @@ pub mod remove {
         path.file_name().unwrap_or_default().into()
     }
 
-    /*
     pub fn first(path: PathBuf) -> OsString {
-        
+        let mut iter = path.components();
+        iter.next();
+        iter.as_path().into()
     }
-    */
 }
 
 
