@@ -1,108 +1,11 @@
-#![feature(path_file_prefix)]
-
-use clap::{crate_version, value_parser, parser::ValuesRef, Arg, ArgMatches, ArgAction, Command};
-use std::ffi::{OsStr, OsString};
+use clap::parser::ValuesRef;
+use std::ffi::{OsString};
 use std::path::PathBuf;
 use std::env;
 use atty;
 use std::io::{self, Read};
 
-enum Component {
-    Extension,
-    Stem,
-    Prefix,
-    Name,
-    Parent,
-    First,
-}
-
-impl TryFrom<&str> for Component {
-    type Error = ();
-
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        use Component::*;
-        let comp = match s {
-            "ext" => Extension,
-            "stem" => Stem,
-            "prefix" => Prefix,
-            "name" => Name,
-            "parent" => Parent,
-            "first" => First,
-            _ => Err(())?,
-        };
-        Ok(comp)
-    }
-}
-
-enum Action {
-    Get,
-    Remove,
-    //Replace,
-}
-
-mod get {
-    use super::*;
-
-    pub fn ext(path: PathBuf) -> OsString {
-        path.extension().unwrap_or_default().into()
-    }
-
-    pub fn stem(path: PathBuf) -> OsString {
-        path.file_stem().unwrap_or_default().into()
-    }
-
-    pub fn prefix(path: PathBuf) -> OsString {
-        path.file_prefix().unwrap_or_default().into()
-    }
-
-    pub fn name(path: PathBuf) -> OsString {
-        path.file_name().unwrap_or_default().into()
-    }
-
-    pub fn parent(path: PathBuf) -> OsString {
-        match path.parent() {
-            Some(path) => path.into(),
-            None => OsString::new(),
-        }
-    }
-
-    pub fn first(path: PathBuf) -> OsString {
-        match path.ancestors().last() {
-            Some(path) => path.into(),
-            None => OsString::new(),
-        }
-    }
-}
-
-mod remove {
-    use super::*;
-
-    pub fn ext(path: PathBuf) -> OsString {
-        path.with_extension(OsStr::new("")).into()
-    }
-
-    /*
-    pub fn stem(path: PathBuf) -> OsString {
-
-    }
-
-    pub fn prefix(path: PathBuf) -> OsString {
-        
-    }
-
-    pub fn name(path: PathBuf) -> OsString {
-        
-    }
-
-    pub fn parent(path: PathBuf) -> OsString {
-
-    }
-
-    pub fn first(path: PathBuf) -> OsString {
-        
-    }
-    */
-}
+use pathmut::*;
 
 fn main() {
     let app = build_app();
@@ -166,68 +69,6 @@ fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> Stri
         result.push('\n');
     }
     result.trim().to_string()
-}
-
-fn build_app() -> Command {
-    Command::new("pathmut")
-        .version(crate_version!())
-        .about("Mutates path strings.")
-        .subcommands([
-            ext_command(),
-            stem_command(),
-            prefix_command(),
-            name_command(),
-            parent_command(),
-        ])
-        .dont_delimit_trailing_values(true)
-        .arg_required_else_help(true)
-}
-
-fn ext_command() -> Command {
-    Command::new("ext")
-        .about("Prints file extension of file in the path.")
-        .arg(path_arg())
-        .arg(remove_arg())
-}
-
-fn stem_command() -> Command {
-    Command::new("stem")
-        .about("Prints file stem of file in the path.")
-        .arg(path_arg())
-}
-
-fn prefix_command() -> Command {
-    Command::new("prefix")
-        .about("Prints file prefix of file in the path.")
-        .arg(path_arg())
-}
-
-fn name_command() -> Command {
-    Command::new("name")
-        .about("Prints the name of the file or directory at the path.")
-        .arg(path_arg())
-}
-
-fn parent_command() -> Command {
-    Command::new("parent")
-        .about("Prints the path without the final file or directory.")
-        .arg(path_arg())
-}
-
-fn path_arg() -> Arg {
-    Arg::new("path")
-        .required(true)
-        .action(ArgAction::Append)
-        .help("Path string to mutate.")
-        .value_parser(value_parser!(PathBuf))
-}
-
-fn remove_arg() -> Arg {
-    Arg::new("remove")
-        .short('r')
-        .long("remove")
-        .action(ArgAction::SetTrue)
-        .help("Remove component from path")
 }
 
 #[cfg(test)]
