@@ -57,6 +57,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Get, Parent) => apply_to_paths(paths, get::parent),
         (Get, First) => apply_to_paths(paths, get::first),
         (Remove, Extension) => apply_to_paths(paths, remove::ext),
+        (Remove, Name) => apply_to_paths(paths, remove::name),
         _ => unreachable!(),
     }
 }
@@ -138,6 +139,16 @@ mod test {
             .assert()
             .success()
             .stdout("dir\n");
+    }
+
+    #[test]
+    fn name_remove() {
+        Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(&["name", "--remove", "/my/path/file.txt"])
+            .assert()
+            .success()
+            .stdout("/my/path/\n");
     }
 
     #[test]

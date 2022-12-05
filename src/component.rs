@@ -83,11 +83,13 @@ pub mod remove {
     pub fn prefix(path: PathBuf) -> OsString {
         
     }
+    */
 
     pub fn name(path: PathBuf) -> OsString {
-        
+        path.with_file_name(OsStr::new("")).into()
     }
 
+    /*
     pub fn parent(path: PathBuf) -> OsString {
 
     }

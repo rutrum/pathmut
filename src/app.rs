@@ -28,24 +28,28 @@ fn stem_command() -> Command {
     Command::new("stem")
         .about("Prints file stem of file in the path.")
         .arg(path_arg())
+        .arg(remove_arg())
 }
 
 fn prefix_command() -> Command {
     Command::new("prefix")
         .about("Prints file prefix of file in the path.")
         .arg(path_arg())
+        .arg(remove_arg())
 }
 
 fn name_command() -> Command {
     Command::new("name")
         .about("Prints the name of the file or directory at the path.")
         .arg(path_arg())
+        .arg(remove_arg())
 }
 
 fn parent_command() -> Command {
     Command::new("parent")
         .about("Prints the path without the final file or directory.")
         .arg(path_arg())
+        .arg(remove_arg())
 }
 
 fn path_arg() -> Arg {
