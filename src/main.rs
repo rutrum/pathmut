@@ -351,6 +351,12 @@ mod test {
             .stdout("file\nanother\n");
     }
 
+    #[test]
+    fn no_multiple_actions() {
+        pathmut(&["ext", "--remove", "--replace", "a", "file.txt"])
+            .failure();
+    }
+
     /*
     #[test]
     fn piped_multiple_paths() {
