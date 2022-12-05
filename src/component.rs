@@ -28,10 +28,10 @@ impl TryFrom<&str> for Component {
     }
 }
 
-pub enum Action {
+pub enum Action<'a> {
     Get,
     Remove,
-    Replace,
+    Replace(&'a str),
 }
 
 pub mod get {
@@ -121,48 +121,17 @@ pub mod remove {
 pub mod replace {
     use super::*;
 
-    pub fn ext(path: PathBuf) -> OsString {
-        path.with_extension(OsStr::new("")).into()
+    pub fn ext(path: PathBuf, s: &str) -> OsString {
+        path.with_extension(OsStr::new(s)).into()
     }
 
-    pub fn stem(path: PathBuf) -> OsString {
+    pub fn stem(path: PathBuf, s: &str) -> OsString {
         if let Some(ext) = path.extension() {
-            path.with_file_name(ext).into()
+            let name = format!("{}.{}", s, ext.to_str().unwrap());
+            path.with_file_name(name).into()
         } else {
-            path.with_file_name(OsStr::new("")).into()
+            path.with_file_name(s).into()
         }
-    }
-
-    pub fn prefix(path: PathBuf) -> OsString {
-        if let Some(name) = path.file_name() {
-            if let Some(prefix) = path.file_prefix() {
-                let after_prefix = name.to_str()
-                    .unwrap()
-                    .split(".")
-                    .skip_while(|&s| s == prefix.to_str().unwrap())
-                    .intersperse(".")
-                    .collect::<String>();
-                path.with_file_name(after_prefix).into()
-            } else {
-                path.into() // unreachable?
-            }
-        } else {
-            path.into()
-        }
-    }
-
-    pub fn name(path: PathBuf) -> OsString {
-        path.with_file_name(OsStr::new("")).into()
-    }
-
-    pub fn parent(path: PathBuf) -> OsString {
-        path.file_name().unwrap_or_default().into()
-    }
-
-    pub fn first(path: PathBuf) -> OsString {
-        let mut iter = path.components();
-        iter.next();
-        iter.as_path().into()
     }
 }
 

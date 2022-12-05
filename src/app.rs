@@ -83,9 +83,9 @@ fn remove_arg() -> Arg {
 }
 
 fn replace_arg() -> Arg {
-    Arg::new("replacement")
+    Arg::new("replace")
         .short('s')
-        .long("substitute")
+        .long("replace")
         .action(ArgAction::Set)
         .help("Replace component in path")
 }

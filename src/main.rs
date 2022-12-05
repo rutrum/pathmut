@@ -34,6 +34,8 @@ fn main() {
         if let Ok(component) = Component::try_from(subcommand) {
             let action = if matches.get_flag("remove") {
                 Action::Remove
+            } else if let Some(s) = matches.get_one::<String>("replace") {
+                Action::Replace(s)
             } else {
                 Action::Get
             };
@@ -62,12 +64,9 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Remove, Name) => apply_to_paths(paths, remove::name),
         (Remove, Parent) => apply_to_paths(paths, remove::parent),
         (Remove, First) => apply_to_paths(paths, remove::first),
-        (Replace, Extension) => apply_to_paths(paths, replace::ext),
-        (Replace, Stem) => apply_to_paths(paths, replace::stem),
-        (Replace, Prefix) => apply_to_paths(paths, replace::prefix),
-        (Replace, Name) => apply_to_paths(paths, replace::name),
-        (Replace, Parent) => apply_to_paths(paths, replace::parent),
-        (Replace, First) => apply_to_paths(paths, replace::first),
+        (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
+        (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
+        _ => unreachable!(),
     }
 }
 
@@ -75,6 +74,16 @@ fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> Stri
     let mut result = String::new();
     for path in paths {
         let new = f(path.to_path_buf());
+        result.extend(new.to_str());
+        result.push('\n');
+    }
+    result.trim().to_string()
+}
+
+fn apply_to_paths_replace(paths: ValuesRef<PathBuf>, s: &str, f: fn(PathBuf, &str) -> OsString) -> String {
+    let mut result = String::new();
+    for path in paths {
+        let new = f(path.to_path_buf(), s);
         result.extend(new.to_str());
         result.push('\n');
     }
@@ -234,7 +243,30 @@ mod test {
                     .success()
                     .stdout("\n");
             }
+        }
 
+        mod replace {
+            use super::*;
+
+            #[test]
+            fn ext() {
+                pathmut(&["ext", "--replace", "sh", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/file.sh\n");
+                pathmut(&["ext", "--replace", "sh", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("/my/path/file.tar.sh\n");
+            }
+
+            #[test]
+            fn stem() {
+                pathmut(&["stem", "--replace", "main", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/main.txt\n");
+                pathmut(&["stem", "--replace", "main", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("/my/path/main.gz\n");
+            }
         }
     }
 
