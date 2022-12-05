@@ -85,72 +85,84 @@ mod test {
             .assert()
     }
 
-    #[test]
-    fn ext() {
-        pathmut(&["ext", "/my/path/file.txt"])
-            .success()
-            .stdout("txt\n");
-        pathmut(&["ext", "/my/path/file.tar.gz"])
-            .success()
-            .stdout("gz\n");
+    mod component {
+        use super::*;
+        mod get {
+            use super::*;
+
+            #[test]
+            fn ext() {
+                pathmut(&["ext", "/my/path/file.txt"])
+                    .success()
+                    .stdout("txt\n");
+                pathmut(&["ext", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("gz\n");
+            }
+
+            #[test]
+            fn stem() {
+                pathmut(&["stem", "/my/path/file.txt"])
+                    .success()
+                    .stdout("file\n");
+                pathmut(&["stem", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("file.tar\n");
+            }
+
+            #[test]
+            fn prefix() {
+                pathmut(&["prefix", "/my/path/file.txt"])
+                    .success()
+                    .stdout("file\n");
+                pathmut(&["prefix", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("file\n");
+            }
+
+            #[test]
+            fn name() {
+                pathmut(&["name", "/my/path/file.txt"])
+                    .success()
+                    .stdout("file.txt\n");
+                pathmut(&["name", "/my/path/dir"])
+                    .success()
+                    .stdout("dir\n");
+            }
+
+            #[test]
+            fn parent() {
+                pathmut(&["parent", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path\n");
+                pathmut(&["parent", "/my/path/dir"])
+                    .success()
+                    .stdout("/my/path\n");
+                pathmut(&["parent", "/"])
+                    .success()
+                    .stdout("\n");
+            }
+        }
+
+        mod remove {
+            use super::*;
+
+            #[test]
+            fn ext() {
+                pathmut(&["ext", "--remove", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/file\n");
+            }
+
+            #[test]
+            fn name() {
+                pathmut(&["name", "--remove", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/\n");
+            }
+        }
     }
 
-    #[test]
-    fn stem() {
-        pathmut(&["stem", "/my/path/file.txt"])
-            .success()
-            .stdout("file\n");
-        pathmut(&["stem", "/my/path/file.tar.gz"])
-            .success()
-            .stdout("file.tar\n");
-    }
-
-    #[test]
-    fn prefix() {
-        pathmut(&["prefix", "/my/path/file.txt"])
-            .success()
-            .stdout("file\n");
-        pathmut(&["prefix", "/my/path/file.tar.gz"])
-            .success()
-            .stdout("file\n");
-    }
-
-    #[test]
-    fn name() {
-        pathmut(&["name", "/my/path/file.txt"])
-            .success()
-            .stdout("file.txt\n");
-        pathmut(&["name", "/my/path/dir"])
-            .success()
-            .stdout("dir\n");
-    }
-
-    #[test]
-    fn name_remove() {
-        pathmut(&["name", "--remove", "/my/path/file.txt"])
-            .success()
-            .stdout("/my/path/\n");
-    }
-
-    #[test]
-    fn ext_remove() {
-        pathmut(&["ext", "--remove", "/my/path/file.txt"])
-            .success()
-            .stdout("/my/path/file\n");
-    }
-
-    #[test]
-    fn parent() {
-        pathmut(&["parent", "/my/path/file.txt"])
-            .success()
-            .stdout("/my/path\n");
-        pathmut(&["parent", "/my/path/dir"])
-            .success()
-            .stdout("/my/path\n");
-        pathmut(&["parent", "/"])
-            .success()
-            .stdout("\n");
-    }
 
     #[test]
     fn from_stdin() {
