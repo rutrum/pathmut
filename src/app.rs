@@ -21,49 +21,47 @@ pub fn build() -> Command {
 fn ext_command() -> Command {
     Command::new("ext")
         .about("Prints file extension of file in the path.")
-        .arg(path_arg())
-        .arg(remove_arg())
-        .arg(replace_arg())
+        .args(component_args())
+        .arg_required_else_help(true)
 }
 
 fn stem_command() -> Command {
     Command::new("stem")
         .about("Prints file stem of file in the path.")
-        .arg(path_arg())
-        .arg(remove_arg())
-        .arg(replace_arg())
+        .args(component_args())
+        .arg_required_else_help(true)
 }
 
 fn prefix_command() -> Command {
     Command::new("prefix")
         .about("Prints file prefix of file in the path.")
-        .arg(path_arg())
-        .arg(remove_arg())
-        .arg(replace_arg())
+        .args(component_args())
+        .arg_required_else_help(true)
 }
 
 fn name_command() -> Command {
     Command::new("name")
         .about("Prints the name of the file or directory at the path.")
-        .arg(path_arg())
-        .arg(remove_arg())
-        .arg(replace_arg())
+        .args(component_args())
+        .arg_required_else_help(true)
 }
 
 fn parent_command() -> Command {
     Command::new("parent")
         .about("Prints the path without the final file or directory.")
-        .arg(path_arg())
-        .arg(remove_arg())
-        .arg(replace_arg())
+        .args(component_args())
+        .arg_required_else_help(true)
 }
 
 fn first_command() -> Command {
     Command::new("first")
         .about("Prints the first component.")
-        .arg(path_arg())
-        .arg(remove_arg())
-        .arg(replace_arg())
+        .args(component_args())
+        .arg_required_else_help(true)
+}
+
+fn component_args() -> [Arg; 3] {
+    [ path_arg(), remove_arg(), replace_arg() ]
 }
 
 fn path_arg() -> Arg {
