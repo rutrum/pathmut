@@ -1,11 +1,44 @@
 #![feature(path_file_prefix)]
 
-use clap::{crate_version, value_parser, parser::ValuesRef, Arg, ArgAction, Command};
+use clap::{crate_version, value_parser, parser::ValuesRef, Arg, ArgMatches, ArgAction, Command};
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::env;
 use atty;
 use std::io::{self, Read};
+
+enum Component {
+    Extension,
+    Stem,
+    Prefix,
+    Name,
+    Parent,
+    First,
+}
+
+impl TryFrom<&str> for Component {
+    type Error = ();
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        use Component::*;
+        let comp = match s {
+            "ext" => Extension,
+            "stem" => Stem,
+            "prefix" => Prefix,
+            "name" => Name,
+            "parent" => Parent,
+            "first" => First,
+            _ => Err(())?,
+        };
+        Ok(comp)
+    }
+}
+
+enum Action {
+    Get,
+    Remove,
+    //Replace,
+}
 
 mod get {
     use super::*;
@@ -94,35 +127,35 @@ fn main() {
 
     let matches = app.get_matches_from(args);
 
-    let result = if let Some(matches) = matches.subcommand_matches("ext") {
-        let paths = matches.get_many::<PathBuf>("path").unwrap();
-        if matches.get_flag("remove") {
-            apply_to_paths(paths, remove::ext)
-        } else {
-            apply_to_paths(paths, get::ext)
+    if let Some((subcommand, matches)) = matches.subcommand() {
+        if let Ok(component) = Component::try_from(subcommand) {
+            let action = if matches.get_flag("remove") {
+                Action::Remove
+            } else {
+                Action::Get
+            };
+
+            let paths = matches.get_many::<PathBuf>("path").unwrap();
+            let result = do_component_action(component, action, paths);
+            println!("{}", result);
         }
+    }
+}
 
-    } else if let Some(matches) = matches.subcommand_matches("stem") {
-        let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, get::stem)
+fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf>) -> String {
+    use Component::*;
+    use Action::*;
 
-    } else if let Some(matches) = matches.subcommand_matches("prefix") {
-        let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, get::prefix)
-
-    } else if let Some(matches) = matches.subcommand_matches("name") {
-        let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, get::name)
-
-    } else if let Some(matches) = matches.subcommand_matches("parent") {
-        let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, get::parent)
-
-    } else {
-        unreachable!()
-    };
-
-    println!("{}", result);
+    match (action, comp) {
+        (Get, Extension) => apply_to_paths(paths, get::ext),
+        (Get, Stem) => apply_to_paths(paths, get::stem),
+        (Get, Prefix) => apply_to_paths(paths, get::prefix),
+        (Get, Name) => apply_to_paths(paths, get::name),
+        (Get, Parent) => apply_to_paths(paths, get::parent),
+        (Get, First) => apply_to_paths(paths, get::first),
+        (Remove, Extension) => apply_to_paths(paths, remove::ext),
+        _ => unreachable!(),
+    }
 }
 
 fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> String {
