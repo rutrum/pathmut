@@ -7,6 +7,70 @@ use std::env;
 use atty;
 use std::io::{self, Read};
 
+mod get {
+    use super::*;
+
+    pub fn ext(path: PathBuf) -> OsString {
+        path.extension().unwrap_or_default().into()
+    }
+
+    pub fn stem(path: PathBuf) -> OsString {
+        path.file_stem().unwrap_or_default().into()
+    }
+
+    pub fn prefix(path: PathBuf) -> OsString {
+        path.file_prefix().unwrap_or_default().into()
+    }
+
+    pub fn name(path: PathBuf) -> OsString {
+        path.file_name().unwrap_or_default().into()
+    }
+
+    pub fn parent(path: PathBuf) -> OsString {
+        match path.parent() {
+            Some(path) => path.into(),
+            None => OsString::new(),
+        }
+    }
+
+    pub fn first(path: PathBuf) -> OsString {
+        match path.ancestors().last() {
+            Some(path) => path.into(),
+            None => OsString::new(),
+        }
+    }
+}
+
+mod remove {
+    use super::*;
+
+    pub fn ext(path: PathBuf) -> OsString {
+        path.with_extension(OsStr::new("")).into()
+    }
+
+    /*
+    pub fn stem(path: PathBuf) -> OsString {
+
+    }
+
+    pub fn prefix(path: PathBuf) -> OsString {
+        
+    }
+
+    pub fn name(path: PathBuf) -> OsString {
+        
+    }
+
+    pub fn parent(path: PathBuf) -> OsString {
+
+    }
+
+    pub fn first(path: PathBuf) -> OsString {
+        
+    }
+    */
+}
+
 fn main() {
     let app = build_app();
 
@@ -32,30 +96,27 @@ fn main() {
 
     let result = if let Some(matches) = matches.subcommand_matches("ext") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.extension().unwrap().into())
+        apply_to_paths(paths, get::ext)
 
     } else if let Some(matches) = matches.subcommand_matches("stem") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.file_stem().unwrap().into())
+        apply_to_paths(paths, get::stem)
 
     } else if let Some(matches) = matches.subcommand_matches("prefix") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.file_prefix().unwrap().into())
+        apply_to_paths(paths, get::prefix)
 
     } else if let Some(matches) = matches.subcommand_matches("name") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.file_name().unwrap().into())
+        apply_to_paths(paths, get::name)
 
     } else if let Some(matches) = matches.subcommand_matches("parent") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |path| path.parent().map(|p| p.as_os_str()).unwrap_or(OsStr::new("")).into())
+        apply_to_paths(paths, get::parent)
 
     } else if let Some(matches) = matches.subcommand_matches("rmext") {
         let paths = matches.get_many::<PathBuf>("path").unwrap();
-        apply_to_paths(paths, |mut path| {
-            path.set_extension(OsStr::new(""));
-            path.as_os_str().into()
-        })
+        apply_to_paths(paths, remove::ext)
 
     } else {
         unreachable!()
