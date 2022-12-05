@@ -66,6 +66,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Remove, First) => apply_to_paths(paths, remove::first),
         (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
         (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
+        (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
         _ => unreachable!(),
     }
 }
@@ -266,6 +267,16 @@ mod test {
                 pathmut(&["stem", "--replace", "main", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/main.gz\n");
+            }
+
+            #[test]
+            fn prefix() {
+                pathmut(&["prefix", "--replace", "main", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path/main.txt\n");
+                pathmut(&["prefix", "--replace", "main", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("/my/path/main.tar.gz\n");
             }
         }
     }

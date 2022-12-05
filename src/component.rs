@@ -1,5 +1,6 @@
 use std::ffi::{OsString, OsStr};
 use std::path::PathBuf;
+use std::iter;
 
 pub enum Component {
     Extension,
@@ -131,6 +132,26 @@ pub mod replace {
             path.with_file_name(name).into()
         } else {
             path.with_file_name(s).into()
+        }
+    }
+
+    pub fn prefix(path: PathBuf, s: &str) -> OsString {
+        if let Some(name) = path.file_name() {
+            if let Some(prefix) = path.file_prefix() {
+                iter::once(s);
+                let after_prefix = iter::once(s).chain(
+                    name.to_str()
+                        .unwrap()
+                        .split(".")
+                        .skip_while(|&s| s == prefix.to_str().unwrap()))
+                    .intersperse(".")
+                    .collect::<String>();
+                path.with_file_name(after_prefix).into()
+            } else {
+                path.into() // unreachable?
+            }
+        } else {
+            path.into()
         }
     }
 }
