@@ -142,6 +142,19 @@ mod test {
                     .success()
                     .stdout("\n");
             }
+
+            #[test]
+            fn first() {
+                pathmut(&["first", "/"])
+                    .success()
+                    .stdout("/\n");
+                pathmut(&["first", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/\n");
+                pathmut(&["first", "my/path/file.txt"])
+                    .success()
+                    .stdout("my\n");
+            }
         }
 
         mod remove {

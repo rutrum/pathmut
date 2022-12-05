@@ -61,7 +61,9 @@ pub mod get {
     }
 
     pub fn first(path: PathBuf) -> OsString {
-        match path.ancestors().last() {
+        match path.ancestors()
+            .filter(|&x| x.as_os_str().len() > 0)
+            .last() {
             Some(path) => path.into(),
             None => OsString::new(),
         }
@@ -75,11 +77,15 @@ pub mod remove {
         path.with_extension(OsStr::new("")).into()
     }
 
-    /*
     pub fn stem(path: PathBuf) -> OsString {
-
+        if let Some(ext) = path.extension() {
+            path.with_file_name(ext).into()
+        } else {
+            path.with_file_name(OsStr::new("")).into()
+        }
     }
 
+    /*
     pub fn prefix(path: PathBuf) -> OsString {
         
     }

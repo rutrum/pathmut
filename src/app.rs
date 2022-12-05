@@ -12,6 +12,7 @@ pub fn build() -> Command {
             prefix_command(),
             name_command(),
             parent_command(),
+            first_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -48,6 +49,13 @@ fn name_command() -> Command {
 fn parent_command() -> Command {
     Command::new("parent")
         .about("Prints the path without the final file or directory.")
+        .arg(path_arg())
+        .arg(remove_arg())
+}
+
+fn first_command() -> Command {
+    Command::new("first")
+        .about("Prints the first component.")
         .arg(path_arg())
         .arg(remove_arg())
 }
