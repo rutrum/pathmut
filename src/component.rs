@@ -62,7 +62,11 @@ pub mod get {
     }
 
     pub fn first(path: PathBuf) -> OsString {
-        match path.ancestors().filter(|&x| !x.as_os_str().is_empty()).last() {
+        match path
+            .ancestors()
+            .filter(|&x| !x.as_os_str().is_empty())
+            .last()
+        {
             Some(path) => path.into(),
             None => OsString::new(),
         }
