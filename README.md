@@ -28,6 +28,42 @@ Options:
 
 This utility is really just a command line wrapper for [Rust's Path struct API](https://doc.rust-lang.org/stable/std/path/struct.Path.html).  Precise details on exactly how these commands work are found there.
 
+## Future Development
+
+I'd like this to be the all in one tool for manipulating path strings.  This tool should never touch or look at the actual filesystem, which means it shouldn't be able to answer if a path exists, if something is a file, create files, etc.  
+
+I should be able to ask questions about path strings, like the following:
+
+* Is the path absolute or relative?
+* Is this a windows path or a unix path?
+* Is the path valid, if it did exist?
+* What is the depth of the path?
+
+I should be able to extract parts of a path:
+
+* Extract the second part of the path.
+
+I should be able to manipulate paths as a whole:
+
+* I should canonicalize a path (remove redundant `../` and `./`)
+
+I should be able to work with multiple paths:
+
+* Does path A begin with path B?
+* Does path A end with path B?
+* Is path B contained with path A?
+* Join path A and path B together.
+
+All the above are questions I'd like answered within this utility, but I'm still not sure if the current API 
+
+```
+pathmut <component> [options] <path>
+```
+
+is the best for extending functionality past the extraction, removal, and replacement features.  For example, if I wanted to have the utility return a successful exit code if the path is absolute, then I would I want to write `pathmut is absolute <path>` or something else?  Should `is` be a subcommand all on its own?  Many more questions can be raised about implementing these features.
+
+The best path forward might be writing a variety of expressions and see which ones feel the most natural to write and easiest to read and organize.
+
 ## Changelog
 
 ### v0.3.0
