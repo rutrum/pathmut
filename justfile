@@ -1,13 +1,13 @@
 default: run
 
 test:
-    cargo +nightly test
+    cargo test
 
 watch:
     watchexec -c -w src -- just test
 
 run *ARGS :
-    cargo +nightly run -- {{ARGS}}
+    cargo run -- {{ARGS}}
 
 dry-publish:
-    cargo +nightly publish --dry-run
+    cargo publish --dry-run
