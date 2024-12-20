@@ -2,6 +2,10 @@ use std::ffi::{OsStr, OsString};
 use std::iter;
 use std::path::PathBuf;
 
+use clap::{ValueEnum, builder::PossibleValue};
+
+// Warning: this may get more complicated, allowing "part[i]"
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Component {
     Extension,
     Stem,
@@ -11,6 +15,8 @@ pub enum Component {
     First,
 }
 
+// TODO: remove
+// may not need this because of ValueEnum
 impl TryFrom<&str> for Component {
     type Error = ();
 
@@ -26,6 +32,33 @@ impl TryFrom<&str> for Component {
             _ => Err(())?,
         };
         Ok(comp)
+    }
+}
+
+// to make clap automatically parse into a component
+impl ValueEnum for Component {
+    fn value_variants<'a>() -> &'a [Self] {
+        use Component::*;
+        &[
+            Extension,
+            Stem,
+            Prefix,
+            Name,
+            Parent,
+            First,
+        ]
+    }
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        use Component::*;
+        let s = match self {
+            Extension => "ext",
+            Stem => "stem",
+            Prefix => "prefix",
+            Name => "name",
+            Parent => "parent",
+            First => "first",
+        };
+        Some(PossibleValue::new(s))
     }
 }
 

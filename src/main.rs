@@ -9,8 +9,37 @@ use pathmut::*;
 fn main() {
     let app = build_app();
 
+    let matches = app.get_matches();
+
+    if let Some((cmd, args)) = matches.subcommand() {
+        // can cmd be not a string?
+        // cmd is gaurrunteed to be good
+
+        // check if cmd is a command or component
+        let cmd = Command::try_from(cmd).expect("required by clap");
+
+        println!("{:?}, {:?}", cmd, args);
+        println!("{:?}", args.get_one::<Component>("component"));
+
+        let component = args.get_one::<Component>("component").expect("required");
+        let paths = args.get_many::<PathBuf>("path").expect("required");
+
+        println!("{:?}", component);
+
+        let action = Action::Get;
+
+        let result = do_component_action(*component, action, paths);
+        println!("{}", result);
+    }
+}
+
+fn main_old() {
+    let app = build_app();
+
+    // what's this for?
     let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
 
+    // isn't this in std now?
     if atty::isnt(atty::Stream::Stdin) {
         let stdin = io::stdin();
         let mut handle = stdin.lock();
