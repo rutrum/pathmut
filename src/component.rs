@@ -15,6 +15,8 @@ pub enum Component {
     First,
     // Root
     // the windows root
+
+    // maybe this won't work
     Nth(usize),
 }
 
@@ -38,11 +40,43 @@ impl TryFrom<&str> for Component {
     }
 }
 
+pub fn arg_into_component(s: &str) -> Result<Component, String> {
+    use Component::*;
+    if let Ok(n) = s.parse::<usize>() {
+        Ok(Nth(n))
+    } else {
+        let component = match s {
+            "ext" => Extension,
+            "stem" => Stem,
+            "prefix" => Prefix,
+            "name" => Name,
+            "parent" => Parent,
+            "first" => First,
+            _ => Err("invalid component")?,
+        };
+        Ok(component)
+    }
+}
+
+// todo: make my own typed value parser
+//struct ComponentParser;
+//impl clap::builder::TypedValueParser for ComponentParser {
+//    type Value = Component;
+//
+//    fn parse_ref(
+//        &self,
+//        cmd: &clap::Command,
+//        arg: Option<&clap::Arg>,
+//        value: &std::ffi::OsStr,
+//    ) -> Result<Self::Value, clap::Error> {
+//    }
+//}
+
 // to make clap automatically parse into a component
 impl ValueEnum for Component {
     fn value_variants<'a>() -> &'a [Self] {
         use Component::*;
-        &[Extension, Stem, Prefix, Name, Parent, First]
+        &[Extension, Stem, Prefix, Name, Parent, First, Nth(5)]
     }
     fn to_possible_value(&self) -> Option<PossibleValue> {
         use Component::*;
@@ -103,7 +137,11 @@ pub mod get {
     }
 
     pub fn nth(n: usize, path: PathBuf) -> OsString {
-        path.into()
+        path.components()
+            .nth(n)
+            .map(|c| c.as_os_str())
+            .unwrap_or_default()
+            .into()
     }
 }
 

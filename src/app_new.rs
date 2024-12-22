@@ -2,6 +2,7 @@ use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 use std::path::PathBuf;
 
 use crate::command::Command as PathCommand;
+use crate::component::arg_into_component;
 use crate::component::Component;
 
 pub fn build() -> Command {
@@ -19,7 +20,7 @@ pub fn build() -> Command {
 fn component_arg() -> Arg {
     Arg::new("component")
         .required(true)
-        .value_parser(value_parser!(Component))
+        .value_parser(arg_into_component)
 }
 
 fn path_arg() -> Arg {
@@ -34,7 +35,8 @@ fn get_command() -> Command {
     Command::new("get")
         .about("Read a file component")
         .arg_required_else_help(true)
-        .subcommands(component::all())
+        .args([component_arg(), path_arg()])
+    //.subcommands(component::all())
 }
 
 fn remove_command() -> Command {
@@ -45,10 +47,14 @@ fn remove_command() -> Command {
 }
 
 fn replace_command() -> Command {
+    // todo: fix this, it works funny since arg component without str works
     Command::new("replace")
         .about("Replace a file component")
         .arg_required_else_help(true)
-        .arg(component_arg())
+        .args([Arg::new("str")
+            .required(true)
+            .value_parser(value_parser!(String))])
+        .subcommands(component::all())
 }
 
 mod component {
