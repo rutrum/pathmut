@@ -66,6 +66,14 @@ The best path forward might be writing a variety of expressions and see which on
 
 ## Changelog
 
+### v0.4.0
+
+* Remove `--remove` and `--replace` args with `remove` and `replace` commands
+* Add `get` command (default behavior)
+* Components are now arguments to `get`, `remove`, and `replace`
+* Specify nth component by using number, `0` for first component, etc.
+* Remove `first` component
+
 ### v0.3.0
 
 * Add `first` command

@@ -13,10 +13,10 @@ fn main() {
     // manually fetch args, so it can be overwritten by piped input
     let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
 
-    if stdin.is_terminal() {
+    if !stdin.is_terminal() {
         // user is piping
         let mut v = Vec::new();
-        let mut handle = stdin.lock();
+        let mut handle = stdin.lock(); // sometimes freezes
         handle.read_to_end(&mut v).unwrap();
         let s = String::from_utf8(v).unwrap();
         if !s.is_empty() {
@@ -30,13 +30,8 @@ fn main() {
         // check if cmd is a command or component
         let cmd = Command::try_from(cmd).expect("required by clap");
 
-        // println!("{:?}, {:?}", cmd, args);
-        // println!("{:?}", args.get_one::<Component>("component"));
-
         let component = args.get_one::<Component>("component").expect("required");
         let paths = args.get_many::<PathBuf>("path").expect("required");
-
-        // println!("{:?}", component);
 
         let action = match cmd {
             Command::Get => Action::Get,
@@ -59,21 +54,18 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Get, Prefix) => apply_to_paths(paths, get::prefix),
         (Get, Name) => apply_to_paths(paths, get::name),
         (Get, Parent) => apply_to_paths(paths, get::parent),
-        (Get, First) => apply_to_paths(paths, get::first),
         (Get, Nth(n)) => apply_nth_to_paths(paths, n, get::nth),
         (Remove, Extension) => apply_to_paths(paths, remove::ext),
         (Remove, Stem) => apply_to_paths(paths, remove::stem),
         (Remove, Prefix) => apply_to_paths(paths, remove::prefix),
         (Remove, Name) => apply_to_paths(paths, remove::name),
         (Remove, Parent) => apply_to_paths(paths, remove::parent),
-        (Remove, First) => apply_to_paths(paths, remove::first),
         (Remove, Nth(n)) => apply_nth_to_paths(paths, n, remove::nth),
         (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
         (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
         (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
         (Replace(s), Name) => apply_to_paths_replace(paths, s, replace::name),
         (Replace(s), Parent) => apply_to_paths_replace(paths, s, replace::parent),
-        (Replace(s), First) => apply_to_paths_replace(paths, s, replace::first),
         (Replace(s), Nth(n)) => apply_nth_to_paths_replace(paths, s, n, replace::nth),
     }
 }
@@ -198,14 +190,25 @@ mod test {
             }
 
             #[test]
-            fn first() {
-                pathmut(&["get", "first", "/"]).success().stdout("/\n");
-                pathmut(&["get", "first", "/my/path/file.txt"])
+            fn nth_0() {
+                pathmut(&["get", "0", "/"]).success().stdout("/\n");
+                pathmut(&["get", "0", "/my/path/file.txt"])
                     .success()
                     .stdout("/\n");
-                pathmut(&["get", "first", "my/path/file.txt"])
+                pathmut(&["get", "0", "my/path/file.txt"])
                     .success()
                     .stdout("my\n");
+            }
+
+            #[test]
+            fn nth_1() {
+                pathmut(&["get", "1", "/"]).success().stdout("\n");
+                pathmut(&["get", "1", "/my/path/file.txt"])
+                    .success()
+                    .stdout("my\n");
+                pathmut(&["get", "1", "my/path/file.txt"])
+                    .success()
+                    .stdout("path\n");
             }
         }
 
@@ -266,16 +269,14 @@ mod test {
             }
 
             #[test]
-            fn first() {
-                pathmut(&["remove", "first", "/my/path/file.txt"])
+            fn nth_0() {
+                pathmut(&["remove", "0", "/my/path/file.txt"])
                     .success()
                     .stdout("my/path/file.txt\n");
-                pathmut(&["remove", "first", "my/path/file.txt"])
+                pathmut(&["remove", "0", "my/path/file.txt"])
                     .success()
                     .stdout("path/file.txt\n");
-                pathmut(&["remove", "first", "file.txt"])
-                    .success()
-                    .stdout("\n");
+                pathmut(&["remove", "0", "file.txt"]).success().stdout("\n");
             }
         }
 
@@ -339,14 +340,14 @@ mod test {
             }
 
             #[test]
-            fn first() {
-                pathmut(&["replace", "new/dir", "first", "/my/path/file.txt"])
+            fn nth_0() {
+                pathmut(&["replace", "new/dir", "0", "/my/path/file.txt"])
                     .success()
                     .stdout("new/dir/my/path/file.txt\n");
-                pathmut(&["replace", "new/dir", "first", "my/path/file.txt"])
+                pathmut(&["replace", "new/dir", "0", "my/path/file.txt"])
                     .success()
                     .stdout("new/dir/path/file.txt\n");
-                pathmut(&["replace", "/", "first", "my/path/file.txt"])
+                pathmut(&["replace", "/", "0", "my/path/file.txt"])
                     .success()
                     .stdout("/path/file.txt\n");
             }
@@ -357,7 +358,7 @@ mod test {
     fn from_stdin() {
         Command::cargo_bin("pathmut")
             .unwrap()
-            .args(&["ext"])
+            .args(&["get", "ext"])
             .write_stdin("/my/path/file.txt")
             .assert()
             .success()
@@ -383,7 +384,7 @@ mod test {
 
     #[test]
     fn no_multiple_actions() {
-        pathmut(&["ext", "--remove", "--replace", "a", "file.txt"]).failure();
+        pathmut(&["get", "ext", "--remove", "--replace", "a", "file.txt"]).failure();
     }
 
     /*

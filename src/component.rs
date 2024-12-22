@@ -12,7 +12,6 @@ pub enum Component {
     Prefix,
     Name,
     Parent,
-    First,
     // Root
     // the windows root
 
@@ -33,7 +32,6 @@ impl TryFrom<&str> for Component {
             "prefix" => Prefix,
             "name" => Name,
             "parent" => Parent,
-            "first" => First,
             _ => Err(())?,
         };
         Ok(comp)
@@ -51,7 +49,6 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
             "prefix" => Prefix,
             "name" => Name,
             "parent" => Parent,
-            "first" => First,
             _ => Err("invalid component")?,
         };
         Ok(component)
@@ -76,7 +73,7 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 impl ValueEnum for Component {
     fn value_variants<'a>() -> &'a [Self] {
         use Component::*;
-        &[Extension, Stem, Prefix, Name, Parent, First, Nth(5)]
+        &[Extension, Stem, Prefix, Name, Parent, Nth(5)]
     }
     fn to_possible_value(&self) -> Option<PossibleValue> {
         use Component::*;
@@ -86,7 +83,6 @@ impl ValueEnum for Component {
             Prefix => "prefix",
             Name => "name",
             Parent => "parent",
-            First => "first",
             Nth(_) => "nth",
         };
         Some(PossibleValue::new(s))
@@ -120,17 +116,6 @@ pub mod get {
 
     pub fn parent(path: PathBuf) -> OsString {
         match path.parent() {
-            Some(path) => path.into(),
-            None => OsString::new(),
-        }
-    }
-
-    pub fn first(path: PathBuf) -> OsString {
-        match path
-            .ancestors()
-            .filter(|&x| !x.as_os_str().is_empty())
-            .last()
-        {
             Some(path) => path.into(),
             None => OsString::new(),
         }
@@ -187,15 +172,18 @@ pub mod remove {
         path.file_name().unwrap_or_default().into()
     }
 
-    pub fn first(path: PathBuf) -> OsString {
-        // rewrite using nth
-        let mut iter = path.components();
-        iter.next();
-        iter.as_path().into()
-    }
-
     pub fn nth(n: usize, path: PathBuf) -> OsString {
-        path.into()
+        path.components()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                if i == n {
+                    None
+                } else {
+                    Some(c.as_os_str().into())
+                }
+            })
+            .collect::<Vec<OsString>>()
+            .join(OsStr::new("/"))
     }
 }
 
@@ -247,14 +235,17 @@ pub mod replace {
             .into()
     }
 
-    pub fn first(path: PathBuf, s: &str) -> OsString {
-        let mut iter = path.components();
-        iter.next();
-        let after_first = iter.as_path();
-        PathBuf::from(s).join(after_first).into()
-    }
-
     pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
-        path.into()
+        path.components()
+            .enumerate()
+            .map(|(i, c)| {
+                if i == n {
+                    PathBuf::from(s)
+                } else {
+                    c.as_os_str().into()
+                }
+            })
+            .collect::<PathBuf>()
+            .into()
     }
 }
