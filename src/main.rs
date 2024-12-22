@@ -24,23 +24,47 @@ fn main() {
         }
     }
 
-    let matches = app.get_matches_from(args);
+    let matches = app.get_matches_from(args.clone());
 
-    if let Some((cmd, args)) = matches.subcommand() {
+    if let Some((cmd, cmd_args)) = matches.subcommand() {
         // check if cmd is a command or component
-        let cmd = Command::try_from(cmd).expect("required by clap");
+        if let Ok(cmd) = Command::try_from(cmd) {
+            let component = cmd_args
+                .get_one::<Component>("component")
+                .expect("required");
+            let paths = cmd_args.get_many::<PathBuf>("path").expect("required");
 
-        let component = args.get_one::<Component>("component").expect("required");
-        let paths = args.get_many::<PathBuf>("path").expect("required");
+            let action = match cmd {
+                Command::Get => Action::Get,
+                Command::Delete => Action::Remove,
+                Command::Replace => {
+                    Action::Replace(cmd_args.get_one::<String>("str").expect("required"))
+                }
+            };
 
-        let action = match cmd {
-            Command::Get => Action::Get,
-            Command::Delete => Action::Remove,
-            Command::Replace => Action::Replace(args.get_one::<String>("str").expect("required")),
-        };
+            let result = do_component_action(*component, action, paths);
+            println!("{}", result);
+        } else {
+            //if let Ok(component) = Component::try_from(cmd) {
 
-        let result = do_component_action(*component, action, paths);
-        println!("{}", result);
+            let matches = get_command().get_matches_from(args);
+
+            //println!("{matches:?}");
+
+            if let Ok(component) = Component::try_from(cmd) {
+                //println!("{cmd:?}");
+
+                //println!("{component:?}");
+                let paths = matches.get_many::<PathBuf>("path").expect("required");
+                let action = Action::Get;
+
+                let result = do_component_action(component, action, paths);
+                println!("{}", result);
+            } else {
+                // neither component nor command, throw error
+                println!("{:?} is not a valid component", cmd);
+            }
+        }
     }
 }
 
@@ -135,6 +159,78 @@ mod test {
 
     mod component {
         use super::*;
+
+        mod default {
+            use super::*;
+
+            #[test]
+            fn ext() {
+                pathmut(&["ext", "/my/path/file.txt"])
+                    .success()
+                    .stdout("txt\n");
+                pathmut(&["ext", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("gz\n");
+            }
+
+            #[test]
+            fn stem() {
+                pathmut(&["stem", "/my/path/file.txt"])
+                    .success()
+                    .stdout("file\n");
+                pathmut(&["stem", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("file.tar\n");
+            }
+
+            #[test]
+            fn prefix() {
+                pathmut(&["prefix", "/my/path/file.txt"])
+                    .success()
+                    .stdout("file\n");
+                pathmut(&["prefix", "/my/path/file.tar.gz"])
+                    .success()
+                    .stdout("file\n");
+            }
+
+            #[test]
+            fn name() {
+                pathmut(&["name", "/my/path/file.txt"])
+                    .success()
+                    .stdout("file.txt\n");
+                pathmut(&["name", "/my/path/dir"]).success().stdout("dir\n");
+            }
+
+            #[test]
+            fn parent() {
+                pathmut(&["parent", "/my/path/file.txt"])
+                    .success()
+                    .stdout("/my/path\n");
+                pathmut(&["parent", "/my/path/dir"])
+                    .success()
+                    .stdout("/my/path\n");
+                pathmut(&["parent", "/"]).success().stdout("\n");
+            }
+
+            #[test]
+            fn nth_0() {
+                pathmut(&["0", "/"]).success().stdout("/\n");
+                pathmut(&["0", "/my/path/file.txt"]).success().stdout("/\n");
+                pathmut(&["0", "my/path/file.txt"]).success().stdout("my\n");
+            }
+
+            #[test]
+            fn nth_1() {
+                pathmut(&["1", "/"]).success().stdout("\n");
+                pathmut(&["1", "/my/path/file.txt"])
+                    .success()
+                    .stdout("my\n");
+                pathmut(&["1", "my/path/file.txt"])
+                    .success()
+                    .stdout("path\n");
+            }
+        }
+
         mod get {
             use super::*;
 

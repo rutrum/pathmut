@@ -14,6 +14,13 @@ pub fn build() -> Command {
         .arg_required_else_help(true)
         .subcommand_value_name("COMPONENT|COMMAND")
         .subcommand_help_heading("Components/Commands")
+        .allow_external_subcommands(true)
+}
+
+fn first_component_arg() -> Arg {
+    Arg::new("component")
+        .value_parser(arg_into_component)
+        .index(1)
 }
 
 fn component_arg() -> Arg {
@@ -31,7 +38,7 @@ fn path_arg() -> Arg {
         .value_parser(value_parser!(PathBuf))
 }
 
-fn get_command() -> Command {
+pub fn get_command() -> Command {
     Command::new("get")
         .about("Read a file component")
         .arg_required_else_help(true)

@@ -32,7 +32,7 @@ impl TryFrom<&str> for Component {
             "prefix" => Prefix,
             "name" => Name,
             "parent" => Parent,
-            _ => Err(())?,
+            _ => Nth(s.parse::<usize>().map_err(|_| ())?),
         };
         Ok(comp)
     }
