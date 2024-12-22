@@ -18,8 +18,8 @@ fn main() {
         // check if cmd is a command or component
         let cmd = Command::try_from(cmd).expect("required by clap");
 
-        println!("{:?}, {:?}", cmd, args);
-        println!("{:?}", args.get_one::<Component>("component"));
+        // println!("{:?}, {:?}", cmd, args);
+        // println!("{:?}", args.get_one::<Component>("component"));
 
         let component = args.get_one::<Component>("component").expect("required");
         let paths = args.get_many::<PathBuf>("path").expect("required");
@@ -84,18 +84,21 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Get, Name) => apply_to_paths(paths, get::name),
         (Get, Parent) => apply_to_paths(paths, get::parent),
         (Get, First) => apply_to_paths(paths, get::first),
+        (Get, Nth(n)) => apply_nth_to_paths(paths, n, get::nth),
         (Remove, Extension) => apply_to_paths(paths, remove::ext),
         (Remove, Stem) => apply_to_paths(paths, remove::stem),
         (Remove, Prefix) => apply_to_paths(paths, remove::prefix),
         (Remove, Name) => apply_to_paths(paths, remove::name),
         (Remove, Parent) => apply_to_paths(paths, remove::parent),
         (Remove, First) => apply_to_paths(paths, remove::first),
+        (Remove, Nth(n)) => apply_nth_to_paths(paths, n, remove::nth),
         (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
         (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
         (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
         (Replace(s), Name) => apply_to_paths_replace(paths, s, replace::name),
         (Replace(s), Parent) => apply_to_paths_replace(paths, s, replace::parent),
         (Replace(s), First) => apply_to_paths_replace(paths, s, replace::first),
+        (Replace(s), Nth(n)) => apply_nth_to_paths_replace(paths, s, n, replace::nth),
     }
 }
 
@@ -103,6 +106,20 @@ fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> Stri
     let mut result = String::new();
     for path in paths {
         let new = f(path.to_path_buf());
+        result.extend(new.to_str());
+        result.push('\n');
+    }
+    result.trim().to_string()
+}
+
+fn apply_nth_to_paths(
+    paths: ValuesRef<PathBuf>,
+    n: usize,
+    f: fn(usize, PathBuf) -> OsString,
+) -> String {
+    let mut result = String::new();
+    for path in paths {
+        let new = f(n, path.to_path_buf());
         result.extend(new.to_str());
         result.push('\n');
     }
@@ -117,6 +134,21 @@ fn apply_to_paths_replace(
     let mut result = String::new();
     for path in paths {
         let new = f(path.to_path_buf(), s);
+        result.extend(new.to_str());
+        result.push('\n');
+    }
+    result.trim().to_string()
+}
+
+fn apply_nth_to_paths_replace(
+    paths: ValuesRef<PathBuf>,
+    s: &str,
+    n: usize,
+    f: fn(usize, PathBuf, &str) -> OsString,
+) -> String {
+    let mut result = String::new();
+    for path in paths {
+        let new = f(n, path.to_path_buf(), s);
         result.extend(new.to_str());
         result.push('\n');
     }
@@ -140,20 +172,20 @@ mod test {
 
             #[test]
             fn ext() {
-                pathmut(&["ext", "/my/path/file.txt"])
+                pathmut(&["get", "ext", "/my/path/file.txt"])
                     .success()
                     .stdout("txt\n");
-                pathmut(&["ext", "/my/path/file.tar.gz"])
+                pathmut(&["get", "ext", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("gz\n");
             }
 
             #[test]
             fn stem() {
-                pathmut(&["stem", "/my/path/file.txt"])
+                pathmut(&["get", "stem", "/my/path/file.txt"])
                     .success()
                     .stdout("file\n");
-                pathmut(&["stem", "/my/path/file.tar.gz"])
+                pathmut(&["get", "stem", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("file.tar\n");
             }

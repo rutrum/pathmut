@@ -2,7 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::iter;
 use std::path::PathBuf;
 
-use clap::{ValueEnum, builder::PossibleValue};
+use clap::{builder::PossibleValue, ValueEnum};
 
 // Warning: this may get more complicated, allowing "part[i]"
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -13,6 +13,9 @@ pub enum Component {
     Name,
     Parent,
     First,
+    // Root
+    // the windows root
+    Nth(usize),
 }
 
 // TODO: remove
@@ -39,14 +42,7 @@ impl TryFrom<&str> for Component {
 impl ValueEnum for Component {
     fn value_variants<'a>() -> &'a [Self] {
         use Component::*;
-        &[
-            Extension,
-            Stem,
-            Prefix,
-            Name,
-            Parent,
-            First,
-        ]
+        &[Extension, Stem, Prefix, Name, Parent, First]
     }
     fn to_possible_value(&self) -> Option<PossibleValue> {
         use Component::*;
@@ -57,6 +53,7 @@ impl ValueEnum for Component {
             Name => "name",
             Parent => "parent",
             First => "first",
+            Nth(_) => "nth",
         };
         Some(PossibleValue::new(s))
     }
@@ -103,6 +100,10 @@ pub mod get {
             Some(path) => path.into(),
             None => OsString::new(),
         }
+    }
+
+    pub fn nth(n: usize, path: PathBuf) -> OsString {
+        path.into()
     }
 }
 
@@ -152,6 +153,10 @@ pub mod remove {
         let mut iter = path.components();
         iter.next();
         iter.as_path().into()
+    }
+
+    pub fn nth(n: usize, path: PathBuf) -> OsString {
+        path.into()
     }
 }
 
@@ -208,5 +213,9 @@ pub mod replace {
         iter.next();
         let after_first = iter.as_path();
         PathBuf::from(s).join(after_first).into()
+    }
+
+    pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
+        path.into()
     }
 }
