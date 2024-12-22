@@ -1,15 +1,30 @@
 use clap::parser::ValuesRef;
 use std::env;
 use std::ffi::OsString;
-use std::io::{self, Read};
+use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 
 use pathmut::*;
 
 fn main() {
     let app = build_app();
+    let stdin = io::stdin();
 
-    let matches = app.get_matches();
+    // manually fetch args, so it can be overwritten by piped input
+    let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
+
+    if stdin.is_terminal() {
+        // user is piping
+        let mut v = Vec::new();
+        let mut handle = stdin.lock();
+        handle.read_to_end(&mut v).unwrap();
+        let s = String::from_utf8(v).unwrap();
+        if !s.is_empty() {
+            args.push(s);
+        }
+    }
+
+    let matches = app.get_matches_from(args);
 
     if let Some((cmd, args)) = matches.subcommand() {
         // check if cmd is a command or component
@@ -31,46 +46,6 @@ fn main() {
 
         let result = do_component_action(*component, action, paths);
         println!("{}", result);
-    }
-}
-
-fn main_old() {
-    let app = build_app();
-
-    // what's this for?
-    let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
-
-    // isn't this in std now?
-    if atty::isnt(atty::Stream::Stdin) {
-        let stdin = io::stdin();
-        let mut handle = stdin.lock();
-
-        let mut v = Vec::new();
-        handle.read_to_end(&mut v).unwrap();
-
-        let s = String::from_utf8(v).unwrap();
-
-        if !s.is_empty() {
-            args.push(s);
-        }
-    }
-
-    let matches = app.get_matches_from(args);
-
-    if let Some((subcommand, matches)) = matches.subcommand() {
-        if let Ok(component) = Component::try_from(subcommand) {
-            let action = if matches.get_flag("remove") {
-                Action::Remove
-            } else if let Some(s) = matches.get_one::<String>("replace") {
-                Action::Replace(s)
-            } else {
-                Action::Get
-            };
-
-            let paths = matches.get_many::<PathBuf>("path").unwrap();
-            let result = do_component_action(component, action, paths);
-            println!("{}", result);
-        }
     }
 }
 
@@ -398,10 +373,10 @@ mod test {
 
     #[test]
     fn multiple_paths() {
-        pathmut(&["ext", "file.txt", "another.png"])
+        pathmut(&["get", "ext", "file.txt", "another.png"])
             .success()
             .stdout("txt\npng\n");
-        pathmut(&["stem", "file.txt", "another.png"])
+        pathmut(&["get", "stem", "file.txt", "another.png"])
             .success()
             .stdout("file\nanother\n");
     }
