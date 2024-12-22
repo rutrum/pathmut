@@ -188,6 +188,7 @@ pub mod remove {
     }
 
     pub fn first(path: PathBuf) -> OsString {
+        // rewrite using nth
         let mut iter = path.components();
         iter.next();
         iter.as_path().into()

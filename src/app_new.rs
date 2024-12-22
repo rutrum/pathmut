@@ -16,8 +16,8 @@ pub fn build() -> Command {
         .subcommand_help_heading("Components/Commands")
 }
 
-// todo remove
 fn component_arg() -> Arg {
+    // todo: figure out way to list possible values
     Arg::new("component")
         .required(true)
         .value_parser(arg_into_component)
@@ -42,8 +42,9 @@ fn get_command() -> Command {
 fn remove_command() -> Command {
     Command::new("remove")
         .about("Remove a file component")
+        .aliases(["rm", "del", "delete"])
         .arg_required_else_help(true)
-        .subcommands(component::all())
+        .args([component_arg(), path_arg()])
 }
 
 fn replace_command() -> Command {
@@ -54,61 +55,5 @@ fn replace_command() -> Command {
         .args([Arg::new("str")
             .required(true)
             .value_parser(value_parser!(String))])
-        .subcommands(component::all())
-}
-
-mod component {
-    use super::*;
-
-    pub fn all() -> Vec<Command> {
-        vec![extension(), stem(), prefix(), first()]
-    }
-
-    //    Extension,
-    //    Stem,
-    //    Prefix,
-    //    Name,
-    //    Parent,
-    //    First,
-    pub fn extension() -> Command {
-        Command::new("ext")
-            .about("File extension")
-            .arg_required_else_help(true)
-            .arg(path_arg())
-    }
-
-    pub fn stem() -> Command {
-        Command::new("stem")
-            .about("File stem")
-            .arg_required_else_help(true)
-            .arg(path_arg())
-    }
-
-    pub fn prefix() -> Command {
-        Command::new("prefix")
-            .about("File prefix")
-            .arg_required_else_help(true)
-            .arg(path_arg())
-    }
-
-    pub fn name() -> Command {
-        Command::new("name")
-            .about("File name")
-            .arg_required_else_help(true)
-            .arg(path_arg())
-    }
-
-    pub fn parent() -> Command {
-        Command::new("parent")
-            .about("Parent of the file or directory")
-            .arg_required_else_help(true)
-            .arg(path_arg())
-    }
-
-    pub fn first() -> Command {
-        Command::new("first")
-            .about("First component")
-            .arg_required_else_help(true)
-            .arg(path_arg())
-    }
+        .args([component_arg(), path_arg()])
 }

@@ -12,9 +12,6 @@ fn main() {
     let matches = app.get_matches();
 
     if let Some((cmd, args)) = matches.subcommand() {
-        // can cmd be not a string?
-        // cmd is gaurrunteed to be good
-
         // check if cmd is a command or component
         let cmd = Command::try_from(cmd).expect("required by clap");
 
@@ -24,9 +21,13 @@ fn main() {
         let component = args.get_one::<Component>("component").expect("required");
         let paths = args.get_many::<PathBuf>("path").expect("required");
 
-        println!("{:?}", component);
+        // println!("{:?}", component);
 
-        let action = Action::Get;
+        let action = match cmd {
+            Command::Get => Action::Get,
+            Command::Delete => Action::Remove,
+            Command::Replace => Action::Replace(args.get_one::<String>("str").expect("required")),
+        };
 
         let result = do_component_action(*component, action, paths);
         println!("{}", result);
@@ -192,40 +193,42 @@ mod test {
 
             #[test]
             fn prefix() {
-                pathmut(&["prefix", "/my/path/file.txt"])
+                pathmut(&["get", "prefix", "/my/path/file.txt"])
                     .success()
                     .stdout("file\n");
-                pathmut(&["prefix", "/my/path/file.tar.gz"])
+                pathmut(&["get", "prefix", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("file\n");
             }
 
             #[test]
             fn name() {
-                pathmut(&["name", "/my/path/file.txt"])
+                pathmut(&["get", "name", "/my/path/file.txt"])
                     .success()
                     .stdout("file.txt\n");
-                pathmut(&["name", "/my/path/dir"]).success().stdout("dir\n");
+                pathmut(&["get", "name", "/my/path/dir"])
+                    .success()
+                    .stdout("dir\n");
             }
 
             #[test]
             fn parent() {
-                pathmut(&["parent", "/my/path/file.txt"])
+                pathmut(&["get", "parent", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path\n");
-                pathmut(&["parent", "/my/path/dir"])
+                pathmut(&["get", "parent", "/my/path/dir"])
                     .success()
                     .stdout("/my/path\n");
-                pathmut(&["parent", "/"]).success().stdout("\n");
+                pathmut(&["get", "parent", "/"]).success().stdout("\n");
             }
 
             #[test]
             fn first() {
-                pathmut(&["first", "/"]).success().stdout("/\n");
-                pathmut(&["first", "/my/path/file.txt"])
+                pathmut(&["get", "first", "/"]).success().stdout("/\n");
+                pathmut(&["get", "first", "/my/path/file.txt"])
                     .success()
                     .stdout("/\n");
-                pathmut(&["first", "my/path/file.txt"])
+                pathmut(&["get", "first", "my/path/file.txt"])
                     .success()
                     .stdout("my\n");
             }
@@ -234,68 +237,68 @@ mod test {
         mod remove {
             use super::*;
 
+            // todo: test aliases
+
             #[test]
             fn ext() {
-                pathmut(&["ext", "--remove", "/my/path/file.txt"])
+                pathmut(&["remove", "ext", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/file\n");
             }
 
             #[test]
             fn stem() {
-                pathmut(&["stem", "--remove", "/my/path/file.txt"])
+                pathmut(&["remove", "stem", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/txt\n");
-                pathmut(&["stem", "--remove", "/my/path/file.tar.gz"])
+                pathmut(&["remove", "stem", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/gz\n");
             }
 
             #[test]
             fn prefix() {
-                pathmut(&["prefix", "--remove", "/my/path/file.tar.gz"])
+                pathmut(&["remove", "prefix", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/tar.gz\n");
-                pathmut(&["prefix", "--remove", "/my/path/file"])
+                pathmut(&["remove", "prefix", "/my/path/file"])
                     .success()
                     .stdout("/my/path/\n");
-                pathmut(&["prefix", "--remove", "/my"])
+                pathmut(&["remove", "prefix", "/my"])
                     .success()
                     .stdout("/\n");
-                pathmut(&["prefix", "--remove", "/"])
-                    .success()
-                    .stdout("/\n");
+                pathmut(&["remove", "prefix", "/"]).success().stdout("/\n");
             }
 
             #[test]
             fn name() {
-                pathmut(&["name", "--remove", "/my/path/file.txt"])
+                pathmut(&["remove", "name", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/\n");
             }
 
             #[test]
             fn parent() {
-                pathmut(&["parent", "--remove", "/my/path/file.tar.gz"])
+                pathmut(&["remove", "parent", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("file.tar.gz\n");
-                pathmut(&["parent", "--remove", "/my/path"])
+                pathmut(&["remove", "parent", "/my/path"])
                     .success()
                     .stdout("path\n");
-                pathmut(&["parent", "--remove", "/my/path/"])
+                pathmut(&["remove", "parent", "/my/path/"])
                     .success()
                     .stdout("path\n");
             }
 
             #[test]
             fn first() {
-                pathmut(&["first", "--remove", "/my/path/file.txt"])
+                pathmut(&["remove", "first", "/my/path/file.txt"])
                     .success()
                     .stdout("my/path/file.txt\n");
-                pathmut(&["first", "--remove", "my/path/file.txt"])
+                pathmut(&["remove", "first", "my/path/file.txt"])
                     .success()
                     .stdout("path/file.txt\n");
-                pathmut(&["first", "--remove", "file.txt"])
+                pathmut(&["remove", "first", "file.txt"])
                     .success()
                     .stdout("\n");
             }
@@ -306,69 +309,69 @@ mod test {
 
             #[test]
             fn ext() {
-                pathmut(&["ext", "--replace", "sh", "/my/path/file.txt"])
+                pathmut(&["replace", "sh", "ext", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/file.sh\n");
-                pathmut(&["ext", "--replace", "sh", "/my/path/file.tar.gz"])
+                pathmut(&["replace", "sh", "ext", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/file.tar.sh\n");
             }
 
             #[test]
             fn stem() {
-                pathmut(&["stem", "--replace", "main", "/my/path/file.txt"])
+                pathmut(&["replace", "main", "stem", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/main.txt\n");
-                pathmut(&["stem", "--replace", "main", "/my/path/file.tar.gz"])
+                pathmut(&["replace", "main", "stem", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/main.gz\n");
             }
 
             #[test]
             fn prefix() {
-                pathmut(&["prefix", "--replace", "main", "/my/path/file.txt"])
+                pathmut(&["replace", "main", "prefix", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/main.txt\n");
-                pathmut(&["prefix", "--replace", "main", "/my/path/file.tar.gz"])
+                pathmut(&["replace", "main", "prefix", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/main.tar.gz\n");
             }
 
             #[test]
             fn name() {
-                pathmut(&["name", "--replace", "main", "/my/path/file.txt"])
+                pathmut(&["replace", "main", "name", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/main\n");
-                pathmut(&["name", "--replace", "main", "/my/path/"])
+                pathmut(&["replace", "main", "name", "/my/path/"])
                     .success()
                     .stdout("/my/main\n");
-                pathmut(&["name", "--replace", "main", "/my/path"])
+                pathmut(&["replace", "main", "name", "/my/path"])
                     .success()
                     .stdout("/my/main\n");
             }
 
             #[test]
             fn parent() {
-                pathmut(&["parent", "--replace", "new/dir", "/my/path/file.txt"])
+                pathmut(&["replace", "new/dir", "parent", "/my/path/file.txt"])
                     .success()
                     .stdout("new/dir/file.txt\n");
-                pathmut(&["parent", "--replace", "/", "my/path/file.txt"])
+                pathmut(&["replace", "/", "parent", "my/path/file.txt"])
                     .success()
                     .stdout("/file.txt\n");
-                pathmut(&["parent", "--replace", "new", "/my/path"])
+                pathmut(&["replace", "new", "parent", "/my/path"])
                     .success()
                     .stdout("new/path\n");
             }
 
             #[test]
             fn first() {
-                pathmut(&["first", "--replace", "new/dir", "/my/path/file.txt"])
+                pathmut(&["replace", "new/dir", "first", "/my/path/file.txt"])
                     .success()
                     .stdout("new/dir/my/path/file.txt\n");
-                pathmut(&["first", "--replace", "new/dir", "my/path/file.txt"])
+                pathmut(&["replace", "new/dir", "first", "my/path/file.txt"])
                     .success()
                     .stdout("new/dir/path/file.txt\n");
-                pathmut(&["first", "--replace", "/", "my/path/file.txt"])
+                pathmut(&["replace", "/", "first", "my/path/file.txt"])
                     .success()
                     .stdout("/path/file.txt\n");
             }

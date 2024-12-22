@@ -20,7 +20,7 @@ impl TryFrom<&str> for Command {
         let command = match s {
             "get" => Get,
             "replace" => Replace,
-            "delete" => Delete,
+            "delete" | "rm" | "del" | "remove" => Delete,
             _ => Err(())?,
         };
         return Ok(command);
