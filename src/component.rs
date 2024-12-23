@@ -2,7 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::iter;
 use std::path::PathBuf;
 
-use clap::{builder::PossibleValue, ValueEnum};
+// use clap::{builder::PossibleValue, ValueEnum};
 
 // Warning: this may get more complicated, allowing "part[i]"
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
