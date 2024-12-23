@@ -55,9 +55,8 @@ pub fn get_command() -> Command {
 }
 
 fn remove_command() -> Command {
-    Command::new("remove")
+    Command::new("delete")
         .about("Remove a file component")
-        .aliases(["rm", "del", "delete"])
         .arg_required_else_help(true)
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())

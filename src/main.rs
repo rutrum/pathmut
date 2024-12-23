@@ -36,7 +36,7 @@ fn main() {
 
             let action = match cmd {
                 Command::Get => Action::Get,
-                Command::Delete => Action::Remove,
+                Command::Delete => Action::Delete,
                 Command::Replace => {
                     Action::Replace(cmd_args.get_one::<String>("str").expect("required"))
                 }
@@ -79,12 +79,12 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Get, Name) => apply_to_paths(paths, get::name),
         (Get, Parent) => apply_to_paths(paths, get::parent),
         (Get, Nth(n)) => apply_nth_to_paths(paths, n, get::nth),
-        (Remove, Extension) => apply_to_paths(paths, remove::ext),
-        (Remove, Stem) => apply_to_paths(paths, remove::stem),
-        (Remove, Prefix) => apply_to_paths(paths, remove::prefix),
-        (Remove, Name) => apply_to_paths(paths, remove::name),
-        (Remove, Parent) => apply_to_paths(paths, remove::parent),
-        (Remove, Nth(n)) => apply_nth_to_paths(paths, n, remove::nth),
+        (Delete, Extension) => apply_to_paths(paths, delete::ext),
+        (Delete, Stem) => apply_to_paths(paths, delete::stem),
+        (Delete, Prefix) => apply_to_paths(paths, delete::prefix),
+        (Delete, Name) => apply_to_paths(paths, delete::name),
+        (Delete, Parent) => apply_to_paths(paths, delete::parent),
+        (Delete, Nth(n)) => apply_nth_to_paths(paths, n, delete::nth),
         (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
         (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
         (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
@@ -308,71 +308,71 @@ mod test {
             }
         }
 
-        mod remove {
+        mod delete {
             use super::*;
 
             // todo: test aliases
 
             #[test]
             fn ext() {
-                pathmut(&["remove", "ext", "/my/path/file.txt"])
+                pathmut(&["delete", "ext", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/file\n");
             }
 
             #[test]
             fn stem() {
-                pathmut(&["remove", "stem", "/my/path/file.txt"])
+                pathmut(&["delete", "stem", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/txt\n");
-                pathmut(&["remove", "stem", "/my/path/file.tar.gz"])
+                pathmut(&["delete", "stem", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/gz\n");
             }
 
             #[test]
             fn prefix() {
-                pathmut(&["remove", "prefix", "/my/path/file.tar.gz"])
+                pathmut(&["delete", "prefix", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("/my/path/tar.gz\n");
-                pathmut(&["remove", "prefix", "/my/path/file"])
+                pathmut(&["delete", "prefix", "/my/path/file"])
                     .success()
                     .stdout("/my/path/\n");
-                pathmut(&["remove", "prefix", "/my"])
+                pathmut(&["delete", "prefix", "/my"])
                     .success()
                     .stdout("/\n");
-                pathmut(&["remove", "prefix", "/"]).success().stdout("/\n");
+                pathmut(&["delete", "prefix", "/"]).success().stdout("/\n");
             }
 
             #[test]
             fn name() {
-                pathmut(&["remove", "name", "/my/path/file.txt"])
+                pathmut(&["delete", "name", "/my/path/file.txt"])
                     .success()
                     .stdout("/my/path/\n");
             }
 
             #[test]
             fn parent() {
-                pathmut(&["remove", "parent", "/my/path/file.tar.gz"])
+                pathmut(&["delete", "parent", "/my/path/file.tar.gz"])
                     .success()
                     .stdout("file.tar.gz\n");
-                pathmut(&["remove", "parent", "/my/path"])
+                pathmut(&["delete", "parent", "/my/path"])
                     .success()
                     .stdout("path\n");
-                pathmut(&["remove", "parent", "/my/path/"])
+                pathmut(&["delete", "parent", "/my/path/"])
                     .success()
                     .stdout("path\n");
             }
 
             #[test]
             fn nth_0() {
-                pathmut(&["remove", "0", "/my/path/file.txt"])
+                pathmut(&["delete", "0", "/my/path/file.txt"])
                     .success()
                     .stdout("my/path/file.txt\n");
-                pathmut(&["remove", "0", "my/path/file.txt"])
+                pathmut(&["delete", "0", "my/path/file.txt"])
                     .success()
                     .stdout("path/file.txt\n");
-                pathmut(&["remove", "0", "file.txt"]).success().stdout("\n");
+                pathmut(&["delete", "0", "file.txt"]).success().stdout("\n");
             }
         }
 

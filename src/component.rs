@@ -91,7 +91,7 @@ impl ValueEnum for Component {
 
 pub enum Action<'a> {
     Get,
-    Remove,
+    Delete,
     Replace(&'a str),
 }
 
@@ -130,7 +130,7 @@ pub mod get {
     }
 }
 
-pub mod remove {
+pub mod delete {
     use super::*;
 
     pub fn ext(path: PathBuf) -> OsString {

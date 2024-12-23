@@ -1,7 +1,7 @@
 [package]
 name = "pathmut"
-version = "0.3.0"
-authors = ["Rutrum <dave@rutrum.net>"]
+version = "0.4.0"
+authors = ["rutrum <dave@rutrum.net>"]
 edition = "2021"
 license = "GPL-3.0"
 description = "Command line utility for extracting, removing, and replacing components from path strings"

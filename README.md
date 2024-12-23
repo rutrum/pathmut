@@ -68,9 +68,9 @@ The best path forward might be writing a variety of expressions and see which on
 
 ### v0.4.0
 
-* Remove `--remove` and `--replace` args with `remove` and `replace` commands
+* Remove `--remove` and `--replace` args with `delete` and `replace` commands
 * Add `get` command (default behavior)
-* Components are now arguments to `get`, `remove`, and `replace`
+* Components are now arguments to `get`, `delete`, and `replace`
 * Specify nth component by using number, `0` for first component, etc.
 * Remove `first` component
 
