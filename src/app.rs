@@ -1,93 +1,73 @@
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
-
 use std::path::PathBuf;
+
+use crate::component::arg_into_component;
 
 pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
         .about("Mutates path strings.")
-        .subcommands([
-            ext_command(),
-            stem_command(),
-            prefix_command(),
-            name_command(),
-            parent_command(),
-            first_command(),
-        ])
+        .subcommands([get_command(), remove_command(), replace_command()])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
-        .subcommand_value_name("COMPONENT|COMMAND")
-        .subcommand_help_heading("Components/Commands")
+        .subcommand_value_name("COMMAND or COMPONENT")
+        .allow_external_subcommands(true)
+        .after_help(components_help_section())
+    // could add custom list of components here
 }
 
-fn ext_command() -> Command {
-    Command::new("ext")
-        .about("Read or update file extension")
-        .args(component_args())
-        .arg_required_else_help(true)
+fn components_help_section() -> &'static str {
+    "\x1B[4;1mComponents:\x1B[0m\n\
+    \x20 \x1B[1mext\x1B[0m      file extension\n\
+    \x20 \x1B[1mstem\x1B[0m     file stem\n\
+    \x20 \x1B[1mprefix\x1B[0m   file prefix\n\
+    \x20 \x1B[1mname\x1B[0m     file name\n\
+    \x20 \x1B[1mparent\x1B[0m   parent of the file or directory\n\
+    \x20 \x1B[1;3mn\x1B[0m        ordinal of the nth component\n"
 }
 
-fn stem_command() -> Command {
-    Command::new("stem")
-        .about("Read or update file stem")
-        .args(component_args())
-        .arg_required_else_help(true)
-}
-
-fn prefix_command() -> Command {
-    Command::new("prefix")
-        .about("Read or update file prefix")
-        .args(component_args())
-        .arg_required_else_help(true)
-}
-
-fn name_command() -> Command {
-    Command::new("name")
-        .about("Read or update file name")
-        .args(component_args())
-        .arg_required_else_help(true)
-}
-
-fn parent_command() -> Command {
-    Command::new("parent")
-        .about("Read or update parent directory")
-        .args(component_args())
-        .arg_required_else_help(true)
-}
-
-fn first_command() -> Command {
-    Command::new("first")
-        .about("Read or update first component")
-        .args(component_args())
-        .arg_required_else_help(true)
-}
-
-fn component_args() -> [Arg; 3] {
-    [path_arg(), remove_arg(), replace_arg()]
+fn component_arg() -> Arg {
+    // todo: figure out way to list possible values
+    Arg::new("component")
+        .required(true)
+        .value_parser(arg_into_component)
+        //.value_parser(value_parser!(Component))
+        .help("Path component")
 }
 
 fn path_arg() -> Arg {
     Arg::new("path")
         .required(true)
         .action(ArgAction::Append)
-        .help("Path string to mutate.")
+        .help("Path string to mutate")
         .value_parser(value_parser!(PathBuf))
 }
 
-fn remove_arg() -> Arg {
-    Arg::new("remove")
-        .short('r')
-        .long("remove")
-        .action(ArgAction::SetTrue)
-        .help("Remove component from path")
-        .conflicts_with("replace")
+pub fn get_command() -> Command {
+    Command::new("get")
+        .about("Read a file component [default]")
+        .arg_required_else_help(true)
+        .args([component_arg(), path_arg()])
+        .after_help(components_help_section())
+    //.subcommands(component::all())
 }
 
-fn replace_arg() -> Arg {
-    Arg::new("replace")
-        .short('s')
-        .long("replace")
-        .action(ArgAction::Set)
-        .help("Replace component in path")
-        .conflicts_with("remove")
+fn remove_command() -> Command {
+    Command::new("delete")
+        .about("Remove a file component")
+        .arg_required_else_help(true)
+        .args([component_arg(), path_arg()])
+        .after_help(components_help_section())
+}
+
+fn replace_command() -> Command {
+    // todo: fix this, it works funny since arg component without str works
+    Command::new("replace")
+        .about("Replace a file component")
+        .arg_required_else_help(true)
+        .args([Arg::new("str")
+            .required(true)
+            .value_parser(value_parser!(String))])
+        .args([component_arg(), path_arg()])
+        .after_help(components_help_section())
 }

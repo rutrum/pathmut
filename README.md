@@ -8,20 +8,32 @@ Important to know this utility only works with path _strings_ and doesn't touch 
 $ pathmut
 Mutates path strings.
 
-Usage: pathmut [COMPONENT|COMMAND]
+Usage: pathmut [COMMAND or COMPONENT]
 
-Components/Commands:
-  ext     Read or update file extension
-  stem    Read or update file stem
-  prefix  Read or update file prefix
-  name    Read or update file name
-  parent  Read or update parent directory
-  first   Read or update first component
-  help    Print this message or the help of the given subcommand(s)
+Commands:
+  get      Read a file component [default]
+  delete   Remove a file component
+  replace  Replace a file component
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help information
   -V, --version  Print version information
+
+Components:
+  ext      file extension
+  stem     file stem
+  prefix   file prefix
+  name     file name
+  parent   parent of the file or directory
+  n        ordinal of the nth component
+```
+
+## Installation
+
+For now, you have to build from source.  The package is available on [crates.io](https://crates.io/crates/pathmut).
+```
+cargo install pathmut
 ```
 
 ## Documentation
@@ -39,10 +51,6 @@ I should be able to ask questions about path strings, like the following:
 * Is the path valid, if it did exist?
 * What is the depth of the path?
 
-I should be able to extract parts of a path:
-
-* Extract the second part of the path.
-
 I should be able to manipulate paths as a whole:
 
 * I should canonicalize a path (remove redundant `../` and `./`)
@@ -53,16 +61,6 @@ I should be able to work with multiple paths:
 * Does path A end with path B?
 * Is path B contained with path A?
 * Join path A and path B together.
-
-All the above are questions I'd like answered within this utility, but I'm still not sure if the current API 
-
-```
-pathmut <component> [options] <path>
-```
-
-is the best for extending functionality past the extraction, removal, and replacement features.  For example, if I wanted to have the utility return a successful exit code if the path is absolute, then I would I want to write `pathmut is absolute <path>` or something else?  Should `is` be a subcommand all on its own?  Many more questions can be raised about implementing these features.
-
-The best path forward might be writing a variety of expressions and see which ones feel the most natural to write and easiest to read and organize.
 
 ## Changelog
 

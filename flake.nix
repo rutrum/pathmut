@@ -9,8 +9,6 @@
     name = "pathmut";
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
-
-    #overrides = pkgs.lib.importTOML ./rust-toolchain.toml;
   in
   {
     devShells.${system}.default = pkgs.mkShell {

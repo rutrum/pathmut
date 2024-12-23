@@ -13,13 +13,10 @@ pub enum Component {
     Name,
     Parent,
     // Root
-    // the windows root
-
-    // maybe this won't work
+    // The windows root
     Nth(usize),
 }
 
-// TODO: remove
 // may not need this because of ValueEnum
 impl TryFrom<&str> for Component {
     type Error = ();
@@ -68,26 +65,6 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 //    ) -> Result<Self::Value, clap::Error> {
 //    }
 //}
-
-// to make clap automatically parse into a component
-impl ValueEnum for Component {
-    fn value_variants<'a>() -> &'a [Self] {
-        use Component::*;
-        &[Extension, Stem, Prefix, Name, Parent, Nth(5)]
-    }
-    fn to_possible_value(&self) -> Option<PossibleValue> {
-        use Component::*;
-        let s = match self {
-            Extension => "ext",
-            Stem => "stem",
-            Prefix => "prefix",
-            Name => "name",
-            Parent => "parent",
-            Nth(_) => "nth",
-        };
-        Some(PossibleValue::new(s))
-    }
-}
 
 pub enum Action<'a> {
     Get,
