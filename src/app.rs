@@ -7,7 +7,12 @@ pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
         .about("Mutates path strings.")
-        .subcommands([get_command(), remove_command(), replace_command()])
+        .subcommands([
+            get_command(),
+            remove_command(),
+            replace_command(),
+            set_command(),
+        ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
         .subcommand_value_name("COMMAND or COMPONENT")
@@ -63,7 +68,19 @@ fn remove_command() -> Command {
 fn replace_command() -> Command {
     // todo: fix this, it works funny since arg component without str works
     Command::new("replace")
-        .about("Replace a file component")
+        .about("Replace an existing file component")
+        .arg_required_else_help(true)
+        .args([Arg::new("str")
+            .required(true)
+            .value_parser(value_parser!(String))])
+        .args([component_arg(), path_arg()])
+        .after_help(components_help_section())
+}
+
+fn set_command() -> Command {
+    // todo: fix this, it works funny since arg component without str works
+    Command::new("set")
+        .about("Set a file component")
         .arg_required_else_help(true)
         .args([Arg::new("str")
             .required(true)

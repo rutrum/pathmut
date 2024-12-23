@@ -1,7 +1,7 @@
 default: run
 
-test:
-    cargo test
+test *ARGS:
+    cargo test -- {{ARGS}}
 
 watch:
     #watchexec -c -w src -- just test

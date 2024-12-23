@@ -68,8 +68,50 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 
 pub enum Action<'a> {
     Get,
+    Set(&'a str),
     Delete,
     Replace(&'a str),
+}
+
+/// Replace means its only set if it already existed
+pub mod replace {
+    use super::*;
+
+    pub fn ext(path: PathBuf, s: &str) -> OsString {
+        match path.extension() {
+            Some(_) => set::ext(path, s),
+            None => path.into(),
+        }
+    }
+
+    pub fn stem(path: PathBuf, s: &str) -> OsString {
+        match path.file_prefix() {
+            Some(_) => set::stem(path, s),
+            None => path.into(),
+        }
+    }
+
+    pub fn prefix(path: PathBuf, s: &str) -> OsString {
+        match path.file_prefix() {
+            Some(_) => set::prefix(path, s),
+            None => path.into(),
+        }
+    }
+    pub fn name(path: PathBuf, s: &str) -> OsString {
+        match path.file_name() {
+            Some(_) => set::name(path, s),
+            None => path.into(),
+        }
+    }
+    pub fn parent(path: PathBuf, s: &str) -> OsString {
+        match path.parent() {
+            Some(_) => set::parent(path, s),
+            None => path.into(),
+        }
+    }
+    pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
+        todo!()
+    }
 }
 
 pub mod get {
@@ -164,7 +206,7 @@ pub mod delete {
     }
 }
 
-pub mod replace {
+pub mod set {
     use super::*;
 
     pub fn ext(path: PathBuf, s: &str) -> OsString {

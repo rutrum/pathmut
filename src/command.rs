@@ -4,7 +4,7 @@ use clap::ValueEnum;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Get,
-    // SET,
+    Set,
     Replace,
     Delete,
     // IS,
@@ -19,6 +19,7 @@ impl TryFrom<&str> for Command {
         use Command::*;
         let command = match s {
             "get" => Get,
+            "set" => Set,
             "replace" => Replace,
             "delete" => Delete,
             _ => Err(())?,
@@ -27,11 +28,12 @@ impl TryFrom<&str> for Command {
     }
 }
 
+// is this necessary?
 impl ValueEnum for Command {
     fn value_variants<'a>() -> &'a [Self] {
         &[
             Command::Get,
-            // Command::Set,
+            Command::Set,
             Command::Replace,
             Command::Delete,
             // Command::Is,
@@ -44,6 +46,7 @@ impl ValueEnum for Command {
         use Command::*;
         let s = match self {
             Get => "get",
+            Set => "set",
             Replace => "replace",
             Delete => "delete",
         };
