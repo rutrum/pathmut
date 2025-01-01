@@ -450,6 +450,19 @@ mod test {
                 .success()
                 .stdout("/path/file.txt\n");
         }
+
+        #[test]
+        fn nth_1() {
+            pathmut(&["replace", "new/dir", "1", "/my/path/file.txt"])
+                .success()
+                .stdout("/new/dir/path/file.txt\n");
+            pathmut(&["replace", "new/dir", "1", "my/path/file.txt"])
+                .success()
+                .stdout("my/new/dir/file.txt\n");
+            pathmut(&["replace", "/", "1", "my/path/file.txt"])
+                .success()
+                .stdout("/file.txt\n");
+        }
     }
 
     mod set {
@@ -463,6 +476,9 @@ mod test {
             pathmut(&["set", "sh", "ext", "/my/path/file.tar.gz"])
                 .success()
                 .stdout("/my/path/file.tar.sh\n");
+            pathmut(&["set", "sh", "ext", "/my/path/file"])
+                .success()
+                .stdout("/my/path/file.sh\n");
         }
 
         #[test]
@@ -539,10 +555,18 @@ mod test {
 
         #[test]
         fn root() {
-            pathmut(&["set", "/", "1", "my/path/file.txt"])
+            pathmut(&["set", "/", "0", "my/path/file.txt"])
                 .success()
                 .stdout("/path/file.txt\n");
-            todo!()
+            pathmut(&["set", "/", "1", "my/path/file.txt"])
+                .success()
+                .stdout("/file.txt\n");
+            pathmut(&["set", "/", "2", "my/path/file.txt"])
+                .success()
+                .stdout("/\n");
+            pathmut(&["set", "/", "3", "my/path/file.txt"])
+                .success()
+                .stdout("/\n");
         }
     }
 
@@ -572,11 +596,15 @@ mod test {
         pathmut(&["get", "stem", "file.txt", "another.png"])
             .success()
             .stdout("file\nanother\n");
-    }
-
-    #[test]
-    fn no_multiple_actions() {
-        pathmut(&["get", "ext", "--remove", "--replace", "a", "file.txt"]).failure();
+        pathmut(&[
+            "set",
+            "blah",
+            "stem",
+            "path/to/file.txt",
+            "just/another.png",
+        ])
+        .success()
+        .stdout("path/to/blah.txt\njust/blah.png\n");
     }
 
     /*

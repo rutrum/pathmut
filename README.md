@@ -64,6 +64,11 @@ I should be able to work with multiple paths:
 
 ## Changelog
 
+### v0.5.0
+
+* Rename `replace` to `set`
+* Add `replace` command, which does not change paths when the component does not exist
+
 ### v0.4.0
 
 * Remove `--remove` and `--replace` args with `delete` and `replace` commands

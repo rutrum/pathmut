@@ -12,3 +12,6 @@ run *ARGS:
 
 dry-publish:
     cargo publish --dry-run
+
+build:
+    cargo build

@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 use std::iter;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // use clap::{builder::PossibleValue, ValueEnum};
 
@@ -110,7 +110,17 @@ pub mod replace {
         }
     }
     pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
-        todo!()
+        let back = path
+            .components()
+            .take(n)
+            .map(|c| c.as_os_str())
+            .collect::<PathBuf>();
+        let front = path
+            .components()
+            .skip(n + 1)
+            .map(|c| c.as_os_str())
+            .collect::<PathBuf>();
+        back.join(Path::new(s)).join(front).into()
     }
 }
 
@@ -255,6 +265,18 @@ pub mod set {
     }
 
     pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
+        // what if path is root?
+        // todo
+
+        // what if n == number of components?
+        let num_components = path.components().count();
+        if num_components == n {
+            return path.join(s).into();
+        }
+
+        // what if n > number of components?
+        // todo
+
         path.components()
             .enumerate()
             .map(|(i, c)| {
