@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 // use clap::{builder::PossibleValue, ValueEnum};
 
-// Warning: this may get more complicated, allowing "part[i]"
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Component {
     Extension,

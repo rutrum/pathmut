@@ -7,7 +7,7 @@ pub enum Command {
     Set,
     Replace,
     Delete,
-    // IS,
+    Is,
     // CONVERT,
     // NORMALIZE
 }
@@ -22,6 +22,7 @@ impl TryFrom<&str> for Command {
             "set" => Set,
             "replace" => Replace,
             "delete" => Delete,
+            "is" => Is,
             _ => Err(())?,
         };
         Ok(command)
@@ -36,7 +37,7 @@ impl ValueEnum for Command {
             Command::Set,
             Command::Replace,
             Command::Delete,
-            // Command::Is,
+            Command::Is,
             // Command::Convert,
             // Command::Normalize,
         ]
@@ -49,14 +50,31 @@ impl ValueEnum for Command {
             Set => "set",
             Replace => "replace",
             Delete => "delete",
+            Is => "is",
         };
         Some(PossibleValue::new(s))
     }
 }
 
-// enum Question {
-//     LINUX,
-//     WINDOWS,
-//     ABSOLUTE,
-//     RELATIVE,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Question {
+    ABSOLUTE,
+    RELATIVE,
+    // LINUX,
+    // WINDOWS,
+}
+
+impl ValueEnum for Question {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[Question::ABSOLUTE, Question::RELATIVE]
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        use Question::*;
+        let s = match self {
+            ABSOLUTE => "absolute",
+            RELATIVE => "relative",
+        };
+        Some(PossibleValue::new(s))
+    }
+}

@@ -29,6 +29,19 @@ fn main() {
     if let Some((cmd, cmd_args)) = matches.subcommand() {
         // check if cmd is a command or component
         if let Ok(cmd) = Command::try_from(cmd) {
+            // if command is is
+            if let Command::Is = cmd {
+                let mut paths = cmd_args.get_many::<PathBuf>("path").expect("required");
+                let question = cmd_args.get_one::<Question>("question").expect("required");
+
+                let answer = match question {
+                    Question::ABSOLUTE => paths.all(|path| path.is_absolute()),
+                    Question::RELATIVE => paths.all(|path| path.is_relative()),
+                };
+                println!("{answer}");
+                return;
+            }
+
             let component = cmd_args
                 .get_one::<Component>("component")
                 .expect("required");
@@ -41,6 +54,7 @@ fn main() {
                     Action::Replace(cmd_args.get_one::<String>("str").expect("required"))
                 }
                 Command::Set => Action::Set(cmd_args.get_one::<String>("str").expect("required")),
+                _ => unreachable!(),
             };
 
             let result = do_component_action(*component, action, paths);
@@ -152,6 +166,24 @@ mod test {
 
     fn pathmut(args: &[&str]) -> Assert {
         Command::cargo_bin("pathmut").unwrap().args(args).assert()
+    }
+
+    mod is {
+        use super::*;
+
+        #[test]
+        fn relative() {
+            pathmut(&["is", "relative", "/my/path/file.txt"]).failure();
+            pathmut(&["is", "relative", "my/path/file.txt"]).success();
+            pathmut(&["is", "relative", "file.txt"]).success();
+        }
+
+        #[test]
+        fn absolute() {
+            pathmut(&["is", "absolute", "/my/path/file.txt"]).success();
+            pathmut(&["is", "absolute", "my/path/file.txt"]).failure();
+            pathmut(&["is", "absolute", "file.txt"]).failure();
+        }
     }
 
     mod default {

@@ -1,6 +1,7 @@
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 use std::path::PathBuf;
 
+use crate::command::Question;
 use crate::component::arg_into_component;
 
 pub fn build() -> Command {
@@ -12,6 +13,7 @@ pub fn build() -> Command {
             remove_command(),
             replace_command(),
             set_command(),
+            is_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -46,6 +48,13 @@ fn path_arg() -> Arg {
         .action(ArgAction::Append)
         .help("Path string to mutate")
         .value_parser(value_parser!(PathBuf))
+}
+
+fn question_arg() -> Arg {
+    Arg::new("question")
+        .required(true)
+        .help("Question to ask")
+        .value_parser(value_parser!(Question))
 }
 
 pub fn get_command() -> Command {
@@ -87,4 +96,10 @@ fn set_command() -> Command {
             .value_parser(value_parser!(String))])
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())
+}
+
+fn is_command() -> Command {
+    Command::new("is")
+        .about("Ask questions about a file path")
+        .args([question_arg(), path_arg()])
 }
