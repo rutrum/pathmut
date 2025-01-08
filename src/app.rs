@@ -99,7 +99,23 @@ fn set_command() -> Command {
 }
 
 fn is_command() -> Command {
+    let any = Arg::new("any")
+        .help("True if one path succeeds")
+        .long("any")
+        .action(ArgAction::SetTrue);
+    let all = Arg::new("all")
+        .help("True only if all paths succeed")
+        .long("all")
+        .action(ArgAction::SetTrue)
+        .conflicts_with("any");
+
+    let print = Arg::new("print")
+        .help("Print 'true' or 'false' to stdout instead of exit code")
+        .short('p')
+        .long("print")
+        .action(ArgAction::SetTrue);
+
     Command::new("is")
         .about("Ask questions about a file path")
-        .args([question_arg(), path_arg()])
+        .args([any, all, print, question_arg(), path_arg()])
 }

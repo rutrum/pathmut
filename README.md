@@ -68,6 +68,9 @@ I should be able to work with multiple paths:
 
 * Rename `replace` to `set`
 * Add `replace` command, which does not change paths when the component does not exist
+* Add `is` command which tests if paths are relative or absolute
+    * `--print` flag to print true/false instead of changing exit code
+    * `--any` and `--all` flags for testing multiple paths
 
 ### v0.4.0
 

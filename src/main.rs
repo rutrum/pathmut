@@ -1,12 +1,14 @@
+use clap::error::ErrorKind;
 use clap::parser::ValuesRef;
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use pathmut::*;
 
-fn main() {
+fn main() -> ExitCode {
     let app = build_app();
     let stdin = io::stdin();
 
@@ -33,32 +35,45 @@ fn main() {
             if let Command::Is = cmd {
                 let mut paths = cmd_args.get_many::<PathBuf>("path").expect("required");
                 let question = cmd_args.get_one::<Question>("question").expect("required");
+                let all = cmd_args.get_one::<bool>("all").unwrap_or(&false);
+                let print = cmd_args.get_one::<bool>("print").unwrap_or(&false);
 
-                let answer = match question {
-                    Question::ABSOLUTE => paths.all(|path| path.is_absolute()),
-                    Question::RELATIVE => paths.all(|path| path.is_relative()),
+                let answer = match (question, all) {
+                    (Question::ABSOLUTE, true) => paths.all(|path| path.is_absolute()),
+                    (Question::ABSOLUTE, false) => paths.any(|path| path.is_absolute()),
+                    (Question::RELATIVE, true) => paths.all(|path| path.is_relative()),
+                    (Question::RELATIVE, false) => paths.any(|path| path.is_relative()),
                 };
-                println!("{answer}");
-                return;
-            }
-
-            let component = cmd_args
-                .get_one::<Component>("component")
-                .expect("required");
-            let paths = cmd_args.get_many::<PathBuf>("path").expect("required");
-
-            let action = match cmd {
-                Command::Get => Action::Get,
-                Command::Delete => Action::Delete,
-                Command::Replace => {
-                    Action::Replace(cmd_args.get_one::<String>("str").expect("required"))
+                if *print {
+                    if answer {
+                        println!("true");
+                    } else {
+                        println!("false");
+                    }
+                } else if !answer {
+                    return ExitCode::FAILURE;
                 }
-                Command::Set => Action::Set(cmd_args.get_one::<String>("str").expect("required")),
-                _ => unreachable!(),
-            };
+            } else {
+                let component = cmd_args
+                    .get_one::<Component>("component")
+                    .expect("required");
+                let paths = cmd_args.get_many::<PathBuf>("path").expect("required");
 
-            let result = do_component_action(*component, action, paths);
-            println!("{}", result);
+                let action = match cmd {
+                    Command::Get => Action::Get,
+                    Command::Delete => Action::Delete,
+                    Command::Replace => {
+                        Action::Replace(cmd_args.get_one::<String>("str").expect("required"))
+                    }
+                    Command::Set => {
+                        Action::Set(cmd_args.get_one::<String>("str").expect("required"))
+                    }
+                    _ => unreachable!(),
+                };
+
+                let result = do_component_action(*component, action, paths);
+                println!("{}", result);
+            }
         } else {
             // assume subcommand is get
             let matches = get_command().get_matches_from(args);
@@ -71,6 +86,8 @@ fn main() {
             println!("{}", result);
         }
     }
+
+    ExitCode::SUCCESS
 }
 
 fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf>) -> String {
@@ -179,10 +196,64 @@ mod test {
         }
 
         #[test]
+        fn relative_any() {
+            pathmut(&["is", "relative", "--any", "my/path/file.txt", "my/path"]).success();
+            pathmut(&["is", "relative", "--any", "/my/path/file.txt", "my/path"]).success();
+            pathmut(&["is", "relative", "--any", "/my/path/file.txt", "/my/path"]).failure();
+            pathmut(&["is", "relative", "--any", "my/path/file.txt"]).success();
+            pathmut(&["is", "relative", "--any", "/my/path/file.txt"]).failure();
+        }
+
+        #[test]
+        fn relative_all() {
+            pathmut(&["is", "relative", "--all", "my/path/file.txt", "my/path"]).success();
+            pathmut(&["is", "relative", "--all", "/my/path/file.txt", "my/path"]).failure();
+            pathmut(&["is", "relative", "--all", "/my/path/file.txt", "/my/path"]).failure();
+            pathmut(&["is", "relative", "--all", "my/path/file.txt"]).success();
+            pathmut(&["is", "relative", "--all", "/my/path/file.txt"]).failure();
+        }
+
+        #[test]
         fn absolute() {
             pathmut(&["is", "absolute", "/my/path/file.txt"]).success();
             pathmut(&["is", "absolute", "my/path/file.txt"]).failure();
             pathmut(&["is", "absolute", "file.txt"]).failure();
+        }
+
+        #[test]
+        fn absolute_any() {
+            pathmut(&["is", "absolute", "--any", "my/path/file.txt", "my/path"]).failure();
+            pathmut(&["is", "absolute", "--any", "/my/path/file.txt", "my/path"]).success();
+            pathmut(&["is", "absolute", "--any", "/my/path/file.txt", "/my/path"]).success();
+            pathmut(&["is", "absolute", "--any", "my/path/file.txt"]).failure();
+            pathmut(&["is", "absolute", "--any", "/my/path/file.txt"]).success();
+        }
+
+        #[test]
+        fn absolute_all() {
+            pathmut(&["is", "absolute", "--all", "my/path/file.txt", "my/path"]).failure();
+            pathmut(&["is", "absolute", "--all", "/my/path/file.txt", "my/path"]).failure();
+            pathmut(&["is", "absolute", "--all", "/my/path/file.txt", "/my/path"]).success();
+            pathmut(&["is", "absolute", "--all", "my/path/file.txt"]).failure();
+            pathmut(&["is", "absolute", "--all", "/my/path/file.txt"]).success();
+        }
+
+        #[test]
+        fn absolute_print() {
+            pathmut(&["is", "absolute", "-p", "/my/path/file.txt"])
+                .success()
+                .stdout("true\n");
+            pathmut(&["is", "absolute", "-p", "my/path/file.txt"])
+                .success()
+                .stdout("false\n");
+            pathmut(&["is", "absolute", "--print", "file.txt"])
+                .success()
+                .stdout("false\n");
+        }
+
+        #[test]
+        fn any_all_conflict() {
+            pathmut(&["is", "--all", "--any", "absolute", "/path/to/file.txt"]).failure();
         }
     }
 
