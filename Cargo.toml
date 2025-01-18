@@ -15,6 +15,7 @@ readme = "README.md"
 [dependencies]
 clap = { version = "^4.0", features = ["cargo", "color", "wrap_help"] }
 atty = "0.2.14"
+typed-path = "0.10.0"
 
 [dev-dependencies]
 predicates = "2.1.1"

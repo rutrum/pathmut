@@ -1,5 +1,5 @@
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
-use std::path::PathBuf;
+use typed_path::TypedPathBuf;
 
 use crate::command::Question;
 use crate::component::arg_into_component;
@@ -47,7 +47,7 @@ fn path_arg() -> Arg {
         .required(true)
         .action(ArgAction::Append)
         .help("Path string to mutate")
-        .value_parser(value_parser!(PathBuf))
+        .value_parser(value_parser!(TypedPathBuf))
 }
 
 fn question_arg() -> Arg {
@@ -100,7 +100,7 @@ fn set_command() -> Command {
 
 fn is_command() -> Command {
     let any = Arg::new("any")
-        .help("True if one path succeeds")
+        .help("[default] True if one path succeeds")
         .long("any")
         .action(ArgAction::SetTrue);
     let all = Arg::new("all")

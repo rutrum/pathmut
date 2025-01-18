@@ -1,10 +1,10 @@
-use clap::error::ErrorKind;
 use clap::parser::ValuesRef;
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
-use std::path::PathBuf;
 use std::process::ExitCode;
+use std::str;
+use typed_path::TypedPathBuf;
 
 use pathmut::*;
 
@@ -33,18 +33,18 @@ fn main() -> ExitCode {
         if let Ok(cmd) = Command::try_from(cmd) {
             // if command is is
             if let Command::Is = cmd {
-                let mut paths = cmd_args.get_many::<PathBuf>("path").expect("required");
+                let mut paths = cmd_args.get_many::<TypedPathBuf>("path").expect("required");
                 let question = cmd_args.get_one::<Question>("question").expect("required");
-                let all = cmd_args.get_one::<bool>("all").unwrap_or(&false);
-                let print = cmd_args.get_one::<bool>("print").unwrap_or(&false);
+                let all = cmd_args.get_flag("all");
+                let print = cmd_args.get_flag("print");
 
                 let answer = match (question, all) {
-                    (Question::ABSOLUTE, true) => paths.all(|path| path.is_absolute()),
-                    (Question::ABSOLUTE, false) => paths.any(|path| path.is_absolute()),
-                    (Question::RELATIVE, true) => paths.all(|path| path.is_relative()),
-                    (Question::RELATIVE, false) => paths.any(|path| path.is_relative()),
+                    (Question::Absolute, true) => paths.all(|path| path.is_absolute()),
+                    (Question::Absolute, false) => paths.any(|path| path.is_absolute()),
+                    (Question::Relative, true) => paths.all(|path| path.is_relative()),
+                    (Question::Relative, false) => paths.any(|path| path.is_relative()),
                 };
-                if *print {
+                if print {
                     if answer {
                         println!("true");
                     } else {
@@ -57,7 +57,7 @@ fn main() -> ExitCode {
                 let component = cmd_args
                     .get_one::<Component>("component")
                     .expect("required");
-                let paths = cmd_args.get_many::<PathBuf>("path").expect("required");
+                let paths = cmd_args.get_many::<TypedPathBuf>("path").expect("required");
 
                 let action = match cmd {
                     Command::Get => Action::Get,
@@ -79,7 +79,7 @@ fn main() -> ExitCode {
             let matches = get_command().get_matches_from(args);
 
             let component = matches.get_one::<Component>("component").expect("required");
-            let paths = matches.get_many::<PathBuf>("path").expect("required");
+            let paths = matches.get_many::<TypedPathBuf>("path").expect("required");
             let action = Action::Get;
 
             let result = do_component_action(*component, action, paths);
@@ -90,12 +90,16 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf>) -> String {
+fn do_component_action(comp: Component, action: Action, paths: ValuesRef<TypedPathBuf>) -> String {
     use Action::*;
     use Component::*;
 
     match (action, comp) {
         (Get, Extension) => apply_to_paths(paths, get::ext),
+        // TODO: rewrite all other functions to use the same function interface
+        // well, I should make sure that this first example works at all
+        _ => todo!(),
+        /*
         (Get, Stem) => apply_to_paths(paths, get::stem),
         (Get, Prefix) => apply_to_paths(paths, get::prefix),
         (Get, Name) => apply_to_paths(paths, get::name),
@@ -119,23 +123,25 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<PathBuf
         (Set(s), Name) => apply_to_paths_replace(paths, s, set::name),
         (Set(s), Parent) => apply_to_paths_replace(paths, s, set::parent),
         (Set(s), Nth(n)) => apply_nth_to_paths_replace(paths, s, n, set::nth),
+        */
     }
 }
 
-fn apply_to_paths(paths: ValuesRef<PathBuf>, f: fn(PathBuf) -> OsString) -> String {
+fn apply_to_paths(paths: ValuesRef<TypedPathBuf>, f: fn(&TypedPathBuf) -> &[u8]) -> String {
     let mut result = String::new();
     for path in paths {
-        let new = f(path.to_path_buf());
-        result.extend(new.to_str());
+        let new = f(path);
+        result.extend(str::from_utf8(new));
         result.push('\n');
     }
     result.trim().to_string()
 }
 
+/*
 fn apply_nth_to_paths(
-    paths: ValuesRef<PathBuf>,
+    paths: ValuesRef<TypedPathBuf>,
     n: usize,
-    f: fn(usize, PathBuf) -> OsString,
+    f: fn(usize, TypedPathBuf) -> OsString,
 ) -> String {
     let mut result = String::new();
     for path in paths {
@@ -147,9 +153,9 @@ fn apply_nth_to_paths(
 }
 
 fn apply_to_paths_replace(
-    paths: ValuesRef<PathBuf>,
+    paths: ValuesRef<TypedPathBuf>,
     s: &str,
-    f: fn(PathBuf, &str) -> OsString,
+    f: fn(TypedPathBuf, &str) -> OsString,
 ) -> String {
     let mut result = String::new();
     for path in paths {
@@ -161,10 +167,10 @@ fn apply_to_paths_replace(
 }
 
 fn apply_nth_to_paths_replace(
-    paths: ValuesRef<PathBuf>,
+    paths: ValuesRef<TypedPathBuf>,
     s: &str,
     n: usize,
-    f: fn(usize, PathBuf, &str) -> OsString,
+    f: fn(usize, TypedPathBuf, &str) -> OsString,
 ) -> String {
     let mut result = String::new();
     for path in paths {
@@ -174,6 +180,7 @@ fn apply_nth_to_paths_replace(
     }
     result.trim().to_string()
 }
+    */
 
 #[cfg(test)]
 mod test {
@@ -708,6 +715,19 @@ mod test {
         ])
         .success()
         .stdout("path/to/blah.txt\njust/blah.png\n");
+    }
+
+    #[test]
+    fn windows() {
+        pathmut(&["get", "ext", r"C:\Users\username\file.txt"])
+            .success()
+            .stdout("txt\n");
+        pathmut(&["get", "stem", r"C:\Users\username\file.txt"])
+            .success()
+            .stdout("file\n");
+        pathmut(&["get", "name", r"C:\Users\username\file.txt"])
+            .success()
+            .stdout("file.txt\n");
     }
 
     /*

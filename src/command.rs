@@ -58,22 +58,22 @@ impl ValueEnum for Command {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Question {
-    ABSOLUTE,
-    RELATIVE,
-    // LINUX,
-    // WINDOWS,
+    Absolute,
+    Relative,
+    // Unix,
+    // Windows,
 }
 
 impl ValueEnum for Question {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Question::ABSOLUTE, Question::RELATIVE]
+        &[Question::Absolute, Question::Relative]
     }
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
         use Question::*;
         let s = match self {
-            ABSOLUTE => "absolute",
-            RELATIVE => "relative",
+            Absolute => "absolute",
+            Relative => "relative",
         };
         Some(PossibleValue::new(s))
     }

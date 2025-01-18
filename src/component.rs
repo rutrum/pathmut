@@ -1,6 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::iter;
 use std::path::{Path, PathBuf};
+use typed_path::TypedPathBuf;
 
 // use clap::{builder::PossibleValue, ValueEnum};
 
@@ -126,8 +127,9 @@ pub mod replace {
 pub mod get {
     use super::*;
 
-    pub fn ext(path: PathBuf) -> OsString {
-        path.extension().unwrap_or_default().into()
+    pub fn ext(path: &TypedPathBuf) -> &[u8] {
+        println!("{:?}", path);
+        path.extension().unwrap_or_default()
     }
 
     pub fn stem(path: PathBuf) -> OsString {
