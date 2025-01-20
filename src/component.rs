@@ -13,7 +13,7 @@ pub enum Component {
     Name,
     Parent,
     // Root
-    // The windows root
+    // The windows prefix
     Nth(usize),
 }
 
@@ -65,6 +65,16 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 //    ) -> Result<Self::Value, clap::Error> {
 //    }
 //}
+
+impl Component {
+    pub fn get(self, path: &TypedPathBuf) -> &[u8] {
+        use Component::*;
+        match self {
+            Extension => path.extension().unwrap_or_default().into(),
+            _ => todo!(),
+        }
+    }
+}
 
 pub enum Action<'a> {
     Get,
@@ -128,27 +138,26 @@ pub mod get {
     use super::*;
 
     pub fn ext(path: &TypedPathBuf) -> &[u8] {
-        println!("{:?}", path);
         path.extension().unwrap_or_default()
     }
 
-    pub fn stem(path: PathBuf) -> OsString {
-        path.file_stem().unwrap_or_default().into()
+    pub fn stem(path: &TypedPathBuf) -> &[u8] {
+        path.file_stem().unwrap_or_default()
     }
 
-    pub fn prefix(path: PathBuf) -> OsString {
-        path.file_prefix().unwrap_or_default().into()
+    pub fn prefix(path: &TypedPathBuf) -> &[u8] {
+        // path.file_prefix().unwrap_or_default().into()
+        todo!()
     }
 
-    pub fn name(path: PathBuf) -> OsString {
+    pub fn name(path: &TypedPathBuf) -> &[u8] {
         path.file_name().unwrap_or_default().into()
     }
 
-    pub fn parent(path: PathBuf) -> OsString {
-        match path.parent() {
-            Some(path) => path.into(),
-            None => OsString::new(),
-        }
+    pub fn parent(path: TypedPathBuf) -> Vec<u8> {
+        path.parent()
+            .map(|parent| parent.to_path_buf().into_vec())
+            .unwrap_or_default()
     }
 
     pub fn nth(n: usize, path: PathBuf) -> OsString {

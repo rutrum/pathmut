@@ -1,3 +1,4 @@
+use clap::builder::ValueParser;
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 use typed_path::TypedPathBuf;
 
@@ -47,7 +48,8 @@ fn path_arg() -> Arg {
         .required(true)
         .action(ArgAction::Append)
         .help("Path string to mutate")
-        .value_parser(value_parser!(TypedPathBuf))
+        //.value_parser(value_parser!(TypedPathBuf))
+        .value_parser(ValueParser::os_string())
 }
 
 fn question_arg() -> Arg {

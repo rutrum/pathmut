@@ -12,6 +12,7 @@ fn main() -> ExitCode {
     let app = build_app();
     let stdin = io::stdin();
 
+    /*
     // manually fetch args, so it can be overwritten by piped input
     let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
 
@@ -27,6 +28,8 @@ fn main() -> ExitCode {
     }
 
     let matches = app.get_matches_from(args.clone());
+    */
+    let matches = app.get_matches();
 
     if let Some((cmd, cmd_args)) = matches.subcommand() {
         // check if cmd is a command or component
@@ -57,7 +60,9 @@ fn main() -> ExitCode {
                 let component = cmd_args
                     .get_one::<Component>("component")
                     .expect("required");
-                let paths = cmd_args.get_many::<TypedPathBuf>("path").expect("required");
+
+                // This requires manual labor
+                let paths = cmd_args.get_many::<OsString>("path").expect("required");
 
                 let action = match cmd {
                     Command::Get => Action::Get,
@@ -71,12 +76,13 @@ fn main() -> ExitCode {
                     _ => unreachable!(),
                 };
 
-                let result = do_component_action(*component, action, paths);
-                println!("{}", result);
+                //let result = do_component_action(*component, action, paths);
+                //println!("{}", result);
             }
         } else {
             // assume subcommand is get
-            let matches = get_command().get_matches_from(args);
+            //let matches = get_command().get_matches_from(args);
+            let matches = get_command().get_matches();
 
             let component = matches.get_one::<Component>("component").expect("required");
             let paths = matches.get_many::<TypedPathBuf>("path").expect("required");
@@ -98,11 +104,11 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<TypedPa
         (Get, Extension) => apply_to_paths(paths, get::ext),
         // TODO: rewrite all other functions to use the same function interface
         // well, I should make sure that this first example works at all
-        _ => todo!(),
-        /*
         (Get, Stem) => apply_to_paths(paths, get::stem),
         (Get, Prefix) => apply_to_paths(paths, get::prefix),
         (Get, Name) => apply_to_paths(paths, get::name),
+        _ => todo!(),
+        /*
         (Get, Parent) => apply_to_paths(paths, get::parent),
         (Get, Nth(n)) => apply_nth_to_paths(paths, n, get::nth),
         (Delete, Extension) => apply_to_paths(paths, delete::ext),
@@ -130,7 +136,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<TypedPa
 fn apply_to_paths(paths: ValuesRef<TypedPathBuf>, f: fn(&TypedPathBuf) -> &[u8]) -> String {
     let mut result = String::new();
     for path in paths {
-        let new = f(path);
+        let new = f(path.into());
         result.extend(str::from_utf8(new));
         result.push('\n');
     }
