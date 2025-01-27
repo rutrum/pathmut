@@ -67,12 +67,18 @@ fn main() -> ExitCode {
                 let action = match cmd {
                     Command::Get => Action::Get,
                     Command::Delete => Action::Delete,
-                    Command::Replace => {
-                        Action::Replace(cmd_args.get_one::<String>("str").expect("required"))
-                    }
-                    Command::Set => {
-                        Action::Set(cmd_args.get_one::<String>("str").expect("required"))
-                    }
+                    Command::Replace => Action::Replace(
+                        cmd_args
+                            .get_one::<OsString>("str")
+                            .expect("required")
+                            .as_encoded_bytes(),
+                    ),
+                    Command::Set => Action::Set(
+                        cmd_args
+                            .get_one::<OsString>("str")
+                            .expect("required")
+                            .as_encoded_bytes(),
+                    ),
                     _ => unreachable!(),
                 };
 

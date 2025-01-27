@@ -83,7 +83,7 @@ fn replace_command() -> Command {
         .arg_required_else_help(true)
         .args([Arg::new("str")
             .required(true)
-            .value_parser(value_parser!(String))])
+            .value_parser(ValueParser::os_string())])
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())
 }
@@ -95,7 +95,7 @@ fn set_command() -> Command {
         .arg_required_else_help(true)
         .args([Arg::new("str")
             .required(true)
-            .value_parser(value_parser!(String))])
+            .value_parser(ValueParser::os_string())])
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())
 }

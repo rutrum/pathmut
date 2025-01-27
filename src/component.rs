@@ -1,5 +1,5 @@
 use std::iter;
-use typed_path::{TypedPath, TypedPathBuf};
+use typed_path::{PathType, TypedPath, TypedPathBuf};
 
 // use clap::{builder::PossibleValue, ValueEnum};
 
@@ -102,6 +102,7 @@ impl Component {
         match action {
             Action::Get => self.get(path),
             Action::Set(s) => self.set(path, s),
+            Action::Replace(s) => self.replace(path, s),
             _ => todo!(),
         }
     }
@@ -126,7 +127,7 @@ impl Component {
     }
 
     pub fn has(self, path: &TypedPath) -> bool {
-        self.get(path).len() == 0
+        self.get(path).len() > 0
     }
 
     pub fn set(self, path: &TypedPath, value: &[u8]) -> Vec<u8> {
@@ -141,19 +142,78 @@ impl Component {
                     path.with_file_name(value).into_vec()
                 }
             }
-            Prefix => todo!(),
+            Prefix => {
+                let after: &[u8] = path
+                    .file_name()
+                    .map(split_file_at_dot)
+                    .and_then(|(_, after)| after)
+                    .unwrap_or_default();
+
+                if let Some(parent) = path.parent() {
+                    let name = if after.len() > 0 {
+                        [value, b".", after].concat()
+                    } else {
+                        value.to_vec()
+                    };
+                    parent.join(name).into_vec()
+                } else {
+                    let new_path = if path.is_unix() {
+                        TypedPath::new(value, PathType::Unix)
+                    } else {
+                        TypedPath::new(value, PathType::Windows)
+                    };
+                    new_path.join(after).into_vec()
+                }
+            }
             Name => path.with_file_name(value).into_vec(),
             Parent => {
-                // need to build a new typedpath
-                // but it needs to be the same unix/win as the
-                // input path
-
-                //TypedPathBuf::from(s)
-                //    .join(path.file_name().unwrap_or_default())
-                //    .into()
-                todo!()
+                let new_parent = match path {
+                    TypedPath::Unix(_) => TypedPath::new(value, PathType::Unix),
+                    TypedPath::Windows(_) => TypedPath::new(value, PathType::Windows),
+                };
+                new_parent
+                    .join(path.file_name().unwrap_or_default())
+                    .into_vec()
             }
-            Nth(n) => todo!(),
+            Nth(n) => {
+                // what if path is root?
+                // todo
+
+                // what if n == number of components?
+                let num_components = path.components().count();
+                if num_components == n {
+                    return path.join(value).into_vec();
+                }
+
+                // what if n > number of components?
+                // todo
+
+                path.components()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        if i == n {
+                            TypedPathBuf::from(value)
+                        } else {
+                            TypedPathBuf::from(c.as_bytes())
+                        }
+                    })
+                    .reduce(|a, b| a.join(b))
+                    .map(|p| p.into_vec())
+                    .unwrap_or_default()
+            }
+        }
+    }
+
+    pub fn replace(self, path: &TypedPath, value: &[u8]) -> Vec<u8> {
+        //println!("{:?}", self);
+        //println!("{:?}", path);
+        //println!("{:?}", value);
+        //println!("{:?}", self.has(path));
+        //println!("{:?}", self.get(path));
+        if self.has(path) {
+            self.set(path, value)
+        } else {
+            path.to_path_buf().into_vec()
         }
     }
 }
