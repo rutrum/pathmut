@@ -1,7 +1,5 @@
-use std::ffi::{OsStr, OsString};
 use std::iter;
-use std::path::{Path, PathBuf};
-use typed_path::TypedPathBuf;
+use typed_path::{TypedPath, TypedPathBuf};
 
 // use clap::{builder::PossibleValue, ValueEnum};
 
@@ -66,168 +64,111 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 //    }
 //}
 
+// TODO: rewrite the following to use [u8] instead of OsStr
+
+trait FilePrefix {
+    fn file_prefix(&self) -> Option<&[u8]>;
+}
+
+impl FilePrefix for TypedPath<'_> {
+    // Referencing std::path::Path::file_prefix
+    // https://doc.rust-lang.org/stable/src/std/path.rs.html#2648-2650
+    fn file_prefix(&self) -> Option<&[u8]> {
+        self.file_name()
+            .map(split_file_at_dot)
+            .and_then(|(before, _after)| Some(before))
+    }
+}
+
+fn split_file_at_dot(file: &[u8]) -> (&[u8], Option<&[u8]>) {
+    // Referencing std::path::split_file_at_dot
+    // https://doc.rust-lang.org/stable/src/std/path.rs.html#340
+    let slice = file;
+    if slice == b".." {
+        return (file, None);
+    }
+
+    let i = match slice[1..].iter().position(|b| *b == b'.') {
+        Some(i) => i + 1,
+        None => return (file, None),
+    };
+    let before = &slice[..i];
+    let after = &slice[i + 1..];
+    (before, Some(after))
+}
+
 impl Component {
-    pub fn get(self, path: &TypedPathBuf) -> &[u8] {
+    pub fn action(self, action: Action, path: &TypedPath) -> Vec<u8> {
+        match action {
+            Action::Get => self.get(path),
+            Action::Set(s) => self.set(path, s),
+            _ => todo!(),
+        }
+    }
+
+    pub fn get(self, path: &TypedPath) -> Vec<u8> {
         use Component::*;
         match self {
             Extension => path.extension().unwrap_or_default().into(),
-            _ => todo!(),
+            Stem => path.file_stem().unwrap_or_default().into(),
+            Prefix => path.file_prefix().unwrap_or_default().into(),
+            Name => path.file_name().unwrap_or_default().into(),
+            Parent => path
+                .parent()
+                .map(|p| p.as_bytes().to_vec())
+                .unwrap_or_default(),
+            Nth(n) => path
+                .components()
+                .nth(n)
+                .map(|c| c.as_bytes().to_vec())
+                .unwrap_or_default(),
+        }
+    }
+
+    pub fn has(self, path: &TypedPath) -> bool {
+        self.get(path).len() == 0
+    }
+
+    pub fn set(self, path: &TypedPath, value: &[u8]) -> Vec<u8> {
+        use Component::*;
+        match self {
+            Extension => path.with_extension(value).into_vec(),
+            Stem => {
+                if let Some(ext) = path.extension() {
+                    let name = [value, b".", ext].concat();
+                    path.with_file_name(name).into_vec()
+                } else {
+                    path.with_file_name(value).into_vec()
+                }
+            }
+            Prefix => todo!(),
+            Name => path.with_file_name(value).into_vec(),
+            Parent => {
+                // need to build a new typedpath
+                // but it needs to be the same unix/win as the
+                // input path
+
+                //TypedPathBuf::from(s)
+                //    .join(path.file_name().unwrap_or_default())
+                //    .into()
+                todo!()
+            }
+            Nth(n) => todo!(),
         }
     }
 }
 
 pub enum Action<'a> {
     Get,
-    Set(&'a str),
+    Set(&'a [u8]),
     Delete,
-    Replace(&'a str),
-}
-
-/// Replace means its only set if it already existed
-pub mod replace {
-    use super::*;
-
-    pub fn ext(path: PathBuf, s: &str) -> OsString {
-        match path.extension() {
-            Some(_) => set::ext(path, s),
-            None => path.into(),
-        }
-    }
-
-    pub fn stem(path: PathBuf, s: &str) -> OsString {
-        match path.file_prefix() {
-            Some(_) => set::stem(path, s),
-            None => path.into(),
-        }
-    }
-
-    pub fn prefix(path: PathBuf, s: &str) -> OsString {
-        match path.file_prefix() {
-            Some(_) => set::prefix(path, s),
-            None => path.into(),
-        }
-    }
-    pub fn name(path: PathBuf, s: &str) -> OsString {
-        match path.file_name() {
-            Some(_) => set::name(path, s),
-            None => path.into(),
-        }
-    }
-    pub fn parent(path: PathBuf, s: &str) -> OsString {
-        match path.parent() {
-            Some(_) => set::parent(path, s),
-            None => path.into(),
-        }
-    }
-    pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
-        let back = path
-            .components()
-            .take(n)
-            .map(|c| c.as_os_str())
-            .collect::<PathBuf>();
-        let front = path
-            .components()
-            .skip(n + 1)
-            .map(|c| c.as_os_str())
-            .collect::<PathBuf>();
-        back.join(Path::new(s)).join(front).into()
-    }
-}
-
-pub mod get {
-    use super::*;
-
-    pub fn ext(path: &TypedPathBuf) -> &[u8] {
-        path.extension().unwrap_or_default()
-    }
-
-    pub fn stem(path: &TypedPathBuf) -> &[u8] {
-        path.file_stem().unwrap_or_default()
-    }
-
-    pub fn prefix(path: &TypedPathBuf) -> &[u8] {
-        // path.file_prefix().unwrap_or_default().into()
-        todo!()
-    }
-
-    pub fn name(path: &TypedPathBuf) -> &[u8] {
-        path.file_name().unwrap_or_default().into()
-    }
-
-    pub fn parent(path: TypedPathBuf) -> Vec<u8> {
-        path.parent()
-            .map(|parent| parent.to_path_buf().into_vec())
-            .unwrap_or_default()
-    }
-
-    pub fn nth(n: usize, path: PathBuf) -> OsString {
-        path.components()
-            .nth(n)
-            .map(|c| c.as_os_str())
-            .unwrap_or_default()
-            .into()
-    }
-}
-
-pub mod delete {
-    use super::*;
-
-    pub fn ext(path: PathBuf) -> OsString {
-        path.with_extension(OsStr::new("")).into()
-    }
-
-    pub fn stem(path: PathBuf) -> OsString {
-        if let Some(ext) = path.extension() {
-            path.with_file_name(ext).into()
-        } else {
-            path.with_file_name(OsStr::new("")).into()
-        }
-    }
-
-    pub fn prefix(path: PathBuf) -> OsString {
-        if let Some(name) = path.file_name() {
-            if let Some(prefix) = path.file_prefix() {
-                let after_prefix = name
-                    .to_str()
-                    .unwrap()
-                    .split('.')
-                    .skip_while(|&s| s == prefix.to_str().unwrap())
-                    .intersperse(".")
-                    .collect::<String>();
-                path.with_file_name(after_prefix).into()
-            } else {
-                path.into() // unreachable?
-            }
-        } else {
-            path.into()
-        }
-    }
-
-    pub fn name(path: PathBuf) -> OsString {
-        path.with_file_name(OsStr::new("")).into()
-    }
-
-    pub fn parent(path: PathBuf) -> OsString {
-        path.file_name().unwrap_or_default().into()
-    }
-
-    pub fn nth(n: usize, path: PathBuf) -> OsString {
-        path.components()
-            .enumerate()
-            .filter_map(|(i, c)| {
-                if i == n {
-                    None
-                } else {
-                    Some(c.as_os_str().into())
-                }
-            })
-            .collect::<Vec<OsString>>()
-            .join(OsStr::new("/"))
-    }
+    Replace(&'a [u8]),
 }
 
 pub mod set {
-    use super::*;
+    use std::ffi::{OsStr, OsString};
+    use std::iter;
+    use std::path::{Path, PathBuf};
 
     pub fn ext(path: PathBuf, s: &str) -> OsString {
         path.with_extension(OsStr::new(s)).into()
@@ -298,5 +239,116 @@ pub mod set {
             })
             .collect::<PathBuf>()
             .into()
+    }
+}
+
+/// Replace means its only set if it already existed
+pub mod replace {
+    use super::set;
+    use std::ffi::{OsStr, OsString};
+    use std::iter;
+    use std::path::{Path, PathBuf};
+
+    pub fn ext(path: PathBuf, s: &str) -> OsString {
+        match path.extension() {
+            Some(_) => set::ext(path, s),
+            None => path.into(),
+        }
+    }
+
+    pub fn stem(path: PathBuf, s: &str) -> OsString {
+        match path.file_prefix() {
+            Some(_) => set::stem(path, s),
+            None => path.into(),
+        }
+    }
+
+    pub fn prefix(path: PathBuf, s: &str) -> OsString {
+        match path.file_prefix() {
+            Some(_) => set::prefix(path, s),
+            None => path.into(),
+        }
+    }
+    pub fn name(path: PathBuf, s: &str) -> OsString {
+        match path.file_name() {
+            Some(_) => set::name(path, s),
+            None => path.into(),
+        }
+    }
+    pub fn parent(path: PathBuf, s: &str) -> OsString {
+        match path.parent() {
+            Some(_) => set::parent(path, s),
+            None => path.into(),
+        }
+    }
+    pub fn nth(n: usize, path: PathBuf, s: &str) -> OsString {
+        let back = path
+            .components()
+            .take(n)
+            .map(|c| c.as_os_str())
+            .collect::<PathBuf>();
+        let front = path
+            .components()
+            .skip(n + 1)
+            .map(|c| c.as_os_str())
+            .collect::<PathBuf>();
+        back.join(Path::new(s)).join(front).into()
+    }
+
+    pub mod delete {
+        use super::*;
+
+        pub fn ext(path: PathBuf) -> OsString {
+            path.with_extension(OsStr::new("")).into()
+        }
+
+        pub fn stem(path: PathBuf) -> OsString {
+            if let Some(ext) = path.extension() {
+                path.with_file_name(ext).into()
+            } else {
+                path.with_file_name(OsStr::new("")).into()
+            }
+        }
+
+        pub fn prefix(path: PathBuf) -> OsString {
+            if let Some(name) = path.file_name() {
+                if let Some(prefix) = path.file_prefix() {
+                    let after_prefix = name
+                        .to_str()
+                        .unwrap()
+                        .split('.')
+                        .skip_while(|&s| s == prefix.to_str().unwrap())
+                        .intersperse(".")
+                        .collect::<String>();
+                    path.with_file_name(after_prefix).into()
+                } else {
+                    path.into() // unreachable?
+                }
+            } else {
+                path.into()
+            }
+        }
+
+        pub fn name(path: PathBuf) -> OsString {
+            path.with_file_name(OsStr::new("")).into()
+        }
+
+        pub fn parent(path: PathBuf) -> OsString {
+            path.file_name().unwrap_or_default().into()
+        }
+
+        pub fn nth(n: usize, path: PathBuf) -> OsString {
+            path.components()
+                .enumerate()
+                .filter_map(|(i, c)| {
+                    if i == n {
+                        None
+                    } else {
+                        Some(c.as_os_str().into())
+                    }
+                })
+                .collect::<Vec<OsString>>()
+                .join(OsStr::new("/"))
+        }
     }
 }

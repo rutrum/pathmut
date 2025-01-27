@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
 use std::str;
-use typed_path::TypedPathBuf;
+use typed_path::{TypedPath, TypedPathBuf};
 
 use pathmut::*;
 
@@ -62,7 +62,7 @@ fn main() -> ExitCode {
                     .expect("required");
 
                 // This requires manual labor
-                let paths = cmd_args.get_many::<OsString>("path").expect("required");
+                let path = cmd_args.get_one::<OsString>("path").expect("required");
 
                 let action = match cmd {
                     Command::Get => Action::Get,
@@ -76,32 +76,46 @@ fn main() -> ExitCode {
                     _ => unreachable!(),
                 };
 
+                let typed_path = TypedPath::derive(path.as_encoded_bytes());
+
+                let result = component.action(action, &typed_path);
+                println!("{}", String::from_utf8_lossy(&result));
+
                 //let result = do_component_action(*component, action, paths);
-                //println!("{}", result);
             }
         } else {
             // assume subcommand is get
             //let matches = get_command().get_matches_from(args);
+            /*
             let matches = get_command().get_matches();
 
             let component = matches.get_one::<Component>("component").expect("required");
-            let paths = matches.get_many::<TypedPathBuf>("path").expect("required");
+            let paths = matches.get_one::<TypedPathBuf>("path").expect("required");
             let action = Action::Get;
 
             let result = do_component_action(*component, action, paths);
             println!("{}", result);
+            */
         }
     }
 
     ExitCode::SUCCESS
 }
 
-fn do_component_action(comp: Component, action: Action, paths: ValuesRef<TypedPathBuf>) -> String {
+fn do_component_action(comp: Component, action: Action, path: &TypedPath) -> Vec<u8> {
     use Action::*;
     use Component::*;
 
     match (action, comp) {
-        (Get, Extension) => apply_to_paths(paths, get::ext),
+        //(Get, Extension) => apply_to_paths(paths, get::ext),
+        (Get, Extension) => comp.get(path),
+        _ => todo!(),
+    }
+
+    /*
+    match (action, comp) {
+        //(Get, Extension) => apply_to_paths(paths, get::ext),
+        (Get, Extension) => comp.get(path),
         // TODO: rewrite all other functions to use the same function interface
         // well, I should make sure that this first example works at all
         (Get, Stem) => apply_to_paths(paths, get::stem),
@@ -131,6 +145,7 @@ fn do_component_action(comp: Component, action: Action, paths: ValuesRef<TypedPa
         (Set(s), Nth(n)) => apply_nth_to_paths_replace(paths, s, n, set::nth),
         */
     }
+    */
 }
 
 fn apply_to_paths(paths: ValuesRef<TypedPathBuf>, f: fn(&TypedPathBuf) -> &[u8]) -> String {

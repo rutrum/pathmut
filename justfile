@@ -4,9 +4,8 @@ test *ARGS:
     cargo build
     cargo test -- {{ARGS}}
 
-watch:
-    watchexec -c -w src -- just test
-    #watchexec -c -w src -- just run
+watch *ARGS:
+    watchexec -c -w src -- just test {{ARGS}}
 
 run *ARGS:
     cargo run -- {{ARGS}}
