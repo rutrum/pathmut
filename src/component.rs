@@ -103,7 +103,7 @@ impl Component {
             Action::Get => self.get(path),
             Action::Set(s) => self.set(path, s),
             Action::Replace(s) => self.replace(path, s),
-            _ => todo!(),
+            Action::Delete => self.delete(path),
         }
     }
 
@@ -205,15 +205,48 @@ impl Component {
     }
 
     pub fn replace(self, path: &TypedPath, value: &[u8]) -> Vec<u8> {
-        //println!("{:?}", self);
-        //println!("{:?}", path);
-        //println!("{:?}", value);
-        //println!("{:?}", self.has(path));
-        //println!("{:?}", self.get(path));
         if self.has(path) {
             self.set(path, value)
         } else {
             path.to_path_buf().into_vec()
+        }
+    }
+
+    pub fn delete(&self, path: &TypedPath) -> Vec<u8> {
+        use Component::*;
+        match self {
+            Stem => {
+                if let Some(ext) = path.extension() {
+                    path.with_file_name(ext).into_vec()
+                } else {
+                    path.with_file_name("").into_vec()
+                }
+            }
+            Prefix => {
+                // revisit, this feels like hard coded, not edge case
+                if path == &TypedPath::derive("/") {
+                    return path.to_path_buf().into_vec();
+                }
+
+                let after: &[u8] = path
+                    .file_name()
+                    .map(split_file_at_dot)
+                    .and_then(|(_, after)| after)
+                    .unwrap_or_default();
+
+                if let Some(parent) = path.parent() {
+                    parent.join(after).into_vec()
+                } else {
+                    let new_path = if path.is_unix() {
+                        TypedPath::new(after, PathType::Unix)
+                    } else {
+                        TypedPath::new(after, PathType::Windows)
+                    };
+                    new_path.to_path_buf().into_vec()
+                }
+            }
+            Name => path.with_file_name("").into_vec(),
+            _ => self.replace(path, b""),
         }
     }
 }

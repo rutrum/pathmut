@@ -468,7 +468,7 @@ mod test {
                 .stdout("/my/path/tar.gz\n");
             pathmut(&["delete", "prefix", "/my/path/file"])
                 .success()
-                .stdout("/my/path/\n");
+                .stdout("/my/path\n");
             pathmut(&["delete", "prefix", "/my"])
                 .success()
                 .stdout("/\n");
@@ -479,7 +479,7 @@ mod test {
         fn name() {
             pathmut(&["delete", "name", "/my/path/file.txt"])
                 .success()
-                .stdout("/my/path/\n");
+                .stdout("/my/path\n");
         }
 
         #[test]
