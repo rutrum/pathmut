@@ -7,14 +7,14 @@ use crate::component::arg_into_component;
 pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
-        .about("Mutates path strings.")
+        .about("Mutates path strings")
         .subcommands([
             get_command(),
             remove_command(),
             replace_command(),
             set_command(),
-            is_command(),
             has_command(),
+            is_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -26,12 +26,12 @@ pub fn build() -> Command {
 
 fn components_help_section() -> &'static str {
     "\x1B[4;1mComponents:\x1B[0m\n\
-    \x20 \x1B[1mext\x1B[0m      file extension\n\
-    \x20 \x1B[1mstem\x1B[0m     file stem\n\
-    \x20 \x1B[1mprefix\x1B[0m   file prefix\n\
-    \x20 \x1B[1mname\x1B[0m     file name\n\
-    \x20 \x1B[1mparent\x1B[0m   parent of the file or directory\n\
-    \x20 \x1B[1;3mn\x1B[0m        ordinal of the nth component\n"
+    \x20 \x1B[1mext\x1B[0m      File extension\n\
+    \x20 \x1B[1mstem\x1B[0m     File stem\n\
+    \x20 \x1B[1mprefix\x1B[0m   File prefix\n\
+    \x20 \x1B[1mname\x1B[0m     File name\n\
+    \x20 \x1B[1mparent\x1B[0m   Parent of the file or directory\n\
+    \x20 \x1B[1;3mn\x1B[0m        Ordinal of the nth component\n"
 }
 
 fn component_arg() -> Arg {
@@ -47,7 +47,7 @@ fn path_arg() -> Arg {
     Arg::new("path")
         .required(true)
         .action(ArgAction::Append)
-        .help("Path string to mutate")
+        .help("Path strings to mutate")
         //.value_parser(value_parser!(TypedPathBuf))
         .value_parser(ValueParser::os_string())
 }
@@ -61,7 +61,7 @@ fn question_arg() -> Arg {
 
 pub fn get_command() -> Command {
     Command::new("get")
-        .about("Read a file component [default]")
+        .about("Read a path component [default]")
         .arg_required_else_help(true)
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())
@@ -69,7 +69,7 @@ pub fn get_command() -> Command {
 
 pub fn has_command() -> Command {
     Command::new("has")
-        .about("Check if a file component exists")
+        .about("Check if a path component exists")
         .arg_required_else_help(true)
         .args(true_false_args())
         .args([component_arg(), path_arg()])
@@ -78,7 +78,7 @@ pub fn has_command() -> Command {
 
 fn remove_command() -> Command {
     Command::new("delete")
-        .about("Remove a file component")
+        .about("Remove a path component")
         .arg_required_else_help(true)
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())
@@ -87,7 +87,7 @@ fn remove_command() -> Command {
 fn replace_command() -> Command {
     // todo: fix this, it works funny since arg component without str works
     Command::new("replace")
-        .about("Replace an existing file component")
+        .about("Replace an existing path component")
         .arg_required_else_help(true)
         .args([Arg::new("str")
             .required(true)
@@ -99,7 +99,7 @@ fn replace_command() -> Command {
 fn set_command() -> Command {
     // todo: fix this, it works funny since arg component without str works
     Command::new("set")
-        .about("Set a file component")
+        .about("Set a path component")
         .arg_required_else_help(true)
         .args([Arg::new("str")
             .required(true)

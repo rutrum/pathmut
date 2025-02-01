@@ -370,6 +370,19 @@ mod test {
             pathmut(&["has", "1", "/my/path/file.txt"]).success();
             pathmut(&["has", "1", "my/path/file.txt"]).success();
         }
+
+        #[test]
+        fn print() {
+            pathmut(&["has", "ext", "-p", "/path/to.txt"])
+                .success()
+                .stdout("true\n");
+            pathmut(&["has", "-p", "ext", "/path/to.txt"])
+                .success()
+                .stdout("true\n");
+            pathmut(&["has", "-p", "ext", "/path/to"])
+                .success()
+                .stdout("false\n");
+        }
     }
 
     mod get {
