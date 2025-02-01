@@ -1,9 +1,7 @@
-use clap::parser::ValuesRef;
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
-use std::str;
 use typed_path::{PathBuf, TypedPath, TypedPathBuf};
 
 use pathmut::*;
@@ -67,7 +65,7 @@ fn main() -> ExitCode {
                     .expect("required");
 
                 // This requires manual labor
-                let mut paths = cmd_args
+                let paths = cmd_args
                     .get_many::<OsString>("path")
                     .expect("required")
                     .into_iter()
@@ -96,8 +94,6 @@ fn main() -> ExitCode {
                 for result in results {
                     println!("{}", String::from_utf8_lossy(&result));
                 }
-
-                //let result = do_component_action(*component, action, paths);
             }
         } else {
             // assume subcommand is get
@@ -116,107 +112,6 @@ fn main() -> ExitCode {
 
     ExitCode::SUCCESS
 }
-
-fn do_component_action(comp: Component, action: Action, path: &TypedPath) -> Vec<u8> {
-    use Action::*;
-    use Component::*;
-
-    match (action, comp) {
-        //(Get, Extension) => apply_to_paths(paths, get::ext),
-        (Get, Extension) => comp.get(path),
-        _ => todo!(),
-    }
-
-    /*
-    match (action, comp) {
-        //(Get, Extension) => apply_to_paths(paths, get::ext),
-        (Get, Extension) => comp.get(path),
-        // TODO: rewrite all other functions to use the same function interface
-        // well, I should make sure that this first example works at all
-        (Get, Stem) => apply_to_paths(paths, get::stem),
-        (Get, Prefix) => apply_to_paths(paths, get::prefix),
-        (Get, Name) => apply_to_paths(paths, get::name),
-        _ => todo!(),
-        /*
-        (Get, Parent) => apply_to_paths(paths, get::parent),
-        (Get, Nth(n)) => apply_nth_to_paths(paths, n, get::nth),
-        (Delete, Extension) => apply_to_paths(paths, delete::ext),
-        (Delete, Stem) => apply_to_paths(paths, delete::stem),
-        (Delete, Prefix) => apply_to_paths(paths, delete::prefix),
-        (Delete, Name) => apply_to_paths(paths, delete::name),
-        (Delete, Parent) => apply_to_paths(paths, delete::parent),
-        (Delete, Nth(n)) => apply_nth_to_paths(paths, n, delete::nth),
-        (Replace(s), Extension) => apply_to_paths_replace(paths, s, replace::ext),
-        (Replace(s), Stem) => apply_to_paths_replace(paths, s, replace::stem),
-        (Replace(s), Prefix) => apply_to_paths_replace(paths, s, replace::prefix),
-        (Replace(s), Name) => apply_to_paths_replace(paths, s, replace::name),
-        (Replace(s), Parent) => apply_to_paths_replace(paths, s, replace::parent),
-        (Replace(s), Nth(n)) => apply_nth_to_paths_replace(paths, s, n, replace::nth),
-        (Set(s), Extension) => apply_to_paths_replace(paths, s, set::ext),
-        (Set(s), Stem) => apply_to_paths_replace(paths, s, set::stem),
-        (Set(s), Prefix) => apply_to_paths_replace(paths, s, set::prefix),
-        (Set(s), Name) => apply_to_paths_replace(paths, s, set::name),
-        (Set(s), Parent) => apply_to_paths_replace(paths, s, set::parent),
-        (Set(s), Nth(n)) => apply_nth_to_paths_replace(paths, s, n, set::nth),
-        */
-    }
-    */
-}
-
-fn apply_to_paths(paths: ValuesRef<TypedPathBuf>, f: fn(&TypedPathBuf) -> &[u8]) -> String {
-    let mut result = String::new();
-    for path in paths {
-        let new = f(path.into());
-        result.extend(str::from_utf8(new));
-        result.push('\n');
-    }
-    result.trim().to_string()
-}
-
-/*
-fn apply_nth_to_paths(
-    paths: ValuesRef<TypedPathBuf>,
-    n: usize,
-    f: fn(usize, TypedPathBuf) -> OsString,
-) -> String {
-    let mut result = String::new();
-    for path in paths {
-        let new = f(n, path.to_path_buf());
-        result.extend(new.to_str());
-        result.push('\n');
-    }
-    result.trim().to_string()
-}
-
-fn apply_to_paths_replace(
-    paths: ValuesRef<TypedPathBuf>,
-    s: &str,
-    f: fn(TypedPathBuf, &str) -> OsString,
-) -> String {
-    let mut result = String::new();
-    for path in paths {
-        let new = f(path.to_path_buf(), s);
-        result.extend(new.to_str());
-        result.push('\n');
-    }
-    result.trim().to_string()
-}
-
-fn apply_nth_to_paths_replace(
-    paths: ValuesRef<TypedPathBuf>,
-    s: &str,
-    n: usize,
-    f: fn(usize, TypedPathBuf, &str) -> OsString,
-) -> String {
-    let mut result = String::new();
-    for path in paths {
-        let new = f(n, path.to_path_buf(), s);
-        result.extend(new.to_str());
-        result.push('\n');
-    }
-    result.trim().to_string()
-}
-    */
 
 #[cfg(test)]
 mod test {
