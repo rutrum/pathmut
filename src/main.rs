@@ -67,7 +67,12 @@ fn main() -> ExitCode {
                     .expect("required");
 
                 // This requires manual labor
-                let path = cmd_args.get_one::<OsString>("path").expect("required");
+                let mut paths = cmd_args
+                    .get_many::<OsString>("path")
+                    .expect("required")
+                    .into_iter()
+                    .map(|path| path.as_encoded_bytes())
+                    .map(TypedPath::derive);
 
                 let action = match cmd {
                     Command::Get => Action::Get,
@@ -87,10 +92,10 @@ fn main() -> ExitCode {
                     _ => unreachable!(),
                 };
 
-                let typed_path = TypedPath::derive(path.as_encoded_bytes());
-
-                let result = component.action(action, &typed_path);
-                println!("{}", String::from_utf8_lossy(&result));
+                let results = paths.map(|path| component.action(&action, &path));
+                for result in results {
+                    println!("{}", String::from_utf8_lossy(&result));
+                }
 
                 //let result = do_component_action(*component, action, paths);
             }
@@ -104,7 +109,7 @@ fn main() -> ExitCode {
             let path = matches.get_one::<OsString>("path").expect("required");
             let typed_path = TypedPath::derive(path.as_encoded_bytes());
 
-            let result = component.action(action, &typed_path);
+            let result = component.action(&action, &typed_path);
             println!("{}", String::from_utf8_lossy(&result));
         }
     }

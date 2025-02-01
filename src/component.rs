@@ -98,7 +98,7 @@ fn split_file_at_dot(file: &[u8]) -> (&[u8], Option<&[u8]>) {
 }
 
 impl Component {
-    pub fn action(self, action: Action, path: &TypedPath) -> Vec<u8> {
+    pub fn action(self, action: &Action, path: &TypedPath) -> Vec<u8> {
         match action {
             Action::Get => self.get(path),
             Action::Set(s) => self.set(path, s),
@@ -251,6 +251,7 @@ impl Component {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Action<'a> {
     Get,
     Set(&'a [u8]),
