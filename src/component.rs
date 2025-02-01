@@ -1,4 +1,3 @@
-use std::iter;
 use typed_path::{PathType, TypedPath, TypedPathBuf};
 
 // use clap::{builder::PossibleValue, ValueEnum};
@@ -75,8 +74,7 @@ impl FilePrefix for TypedPath<'_> {
     // https://doc.rust-lang.org/stable/src/std/path.rs.html#2648-2650
     fn file_prefix(&self) -> Option<&[u8]> {
         self.file_name()
-            .map(split_file_at_dot)
-            .and_then(|(before, _after)| Some(before))
+            .map(split_file_at_dot).map(|(before, _after)| before)
     }
 }
 
@@ -127,7 +125,7 @@ impl Component {
     }
 
     pub fn has(self, path: &TypedPath) -> bool {
-        self.get(path).len() > 0
+        !self.get(path).is_empty()
     }
 
     pub fn set(self, path: &TypedPath, value: &[u8]) -> Vec<u8> {
@@ -150,7 +148,7 @@ impl Component {
                     .unwrap_or_default();
 
                 if let Some(parent) = path.parent() {
-                    let name = if after.len() > 0 {
+                    let name = if !after.is_empty() {
                         [value, b".", after].concat()
                     } else {
                         value.to_vec()

@@ -2,7 +2,7 @@ use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
-use typed_path::{PathBuf, TypedPath, TypedPathBuf};
+use typed_path::TypedPath;
 
 use pathmut::*;
 
@@ -36,7 +36,6 @@ fn main() -> ExitCode {
                 let mut paths = cmd_args
                     .get_many::<OsString>("path")
                     .expect("required")
-                    .into_iter()
                     .map(|path| path.as_encoded_bytes())
                     .map(TypedPath::derive);
 
@@ -49,6 +48,10 @@ fn main() -> ExitCode {
                     (Question::Absolute, false) => paths.any(|path| path.is_absolute()),
                     (Question::Relative, true) => paths.all(|path| path.is_relative()),
                     (Question::Relative, false) => paths.any(|path| path.is_relative()),
+                    (Question::Unix, true) => paths.all(|path| path.is_unix()),
+                    (Question::Unix, false) => paths.any(|path| path.is_unix()),
+                    (Question::Windows, true) => paths.all(|path| path.is_windows()),
+                    (Question::Windows, false) => paths.any(|path| path.is_windows()),
                 };
                 if print {
                     if answer {
@@ -68,7 +71,6 @@ fn main() -> ExitCode {
                 let paths = cmd_args
                     .get_many::<OsString>("path")
                     .expect("required")
-                    .into_iter()
                     .map(|path| path.as_encoded_bytes())
                     .map(TypedPath::derive);
 
@@ -192,6 +194,26 @@ mod test {
         #[test]
         fn any_all_conflict() {
             pathmut(&["is", "--all", "--any", "absolute", "/path/to/file.txt"]).failure();
+        }
+
+        #[test]
+        fn windows() {
+            pathmut(&["is", "windows", r"C:\my\path"]).success();
+            pathmut(&["is", "unix", r"C:\my\path"]).failure();
+            pathmut(&["is", "windows", r"\my\path"]).success();
+            pathmut(&["is", "unix", r"\my\path"]).failure();
+
+            // TODO: Make my own heuristic, I guess
+            // pathmut(&["is", "windows", r"my\path"]).success();
+            // pathmut(&["is", "unix", r"my\path"]).failure();
+        }
+
+        #[test]
+        fn unix() {
+            pathmut(&["is", "windows", r"/my/path"]).failure();
+            pathmut(&["is", "unix", r"/my/path"]).success();
+            pathmut(&["is", "windows", r"my/path"]).failure();
+            pathmut(&["is", "unix", r"my/path"]).success();
         }
     }
 
@@ -615,7 +637,7 @@ mod test {
     fn from_stdin() {
         Command::cargo_bin("pathmut")
             .unwrap()
-            .args(&["get", "ext"])
+            .args(["get", "ext"])
             .write_stdin("/my/path/file.txt")
             .assert()
             .success()

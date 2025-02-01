@@ -1,6 +1,5 @@
 use clap::builder::ValueParser;
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
-use typed_path::TypedPathBuf;
 
 use crate::command::Question;
 use crate::component::arg_into_component;

@@ -60,13 +60,18 @@ impl ValueEnum for Command {
 pub enum Question {
     Absolute,
     Relative,
-    // Unix,
-    // Windows,
+    Unix,
+    Windows,
 }
 
 impl ValueEnum for Question {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Question::Absolute, Question::Relative]
+        &[
+            Question::Absolute,
+            Question::Relative,
+            Question::Unix,
+            Question::Windows,
+        ]
     }
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
@@ -74,6 +79,8 @@ impl ValueEnum for Question {
         let s = match self {
             Absolute => "absolute",
             Relative => "relative",
+            Unix => "unix",
+            Windows => "windows",
         };
         Some(PossibleValue::new(s))
     }
