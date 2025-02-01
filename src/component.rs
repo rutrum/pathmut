@@ -74,7 +74,8 @@ impl FilePrefix for TypedPath<'_> {
     // https://doc.rust-lang.org/stable/src/std/path.rs.html#2648-2650
     fn file_prefix(&self) -> Option<&[u8]> {
         self.file_name()
-            .map(split_file_at_dot).map(|(before, _after)| before)
+            .map(split_file_at_dot)
+            .map(|(before, _after)| before)
     }
 }
 

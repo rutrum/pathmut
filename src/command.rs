@@ -8,6 +8,7 @@ pub enum Command {
     Replace,
     Delete,
     Is,
+    Has,
     // CONVERT,
     // NORMALIZE
 }
@@ -23,6 +24,7 @@ impl TryFrom<&str> for Command {
             "replace" => Replace,
             "delete" => Delete,
             "is" => Is,
+            "has" => Has,
             _ => Err(())?,
         };
         Ok(command)
@@ -38,6 +40,7 @@ impl ValueEnum for Command {
             Command::Replace,
             Command::Delete,
             Command::Is,
+            Command::Has,
             // Command::Convert,
             // Command::Normalize,
         ]
@@ -51,6 +54,7 @@ impl ValueEnum for Command {
             Replace => "replace",
             Delete => "delete",
             Is => "is",
+            Has => "has",
         };
         Some(PossibleValue::new(s))
     }

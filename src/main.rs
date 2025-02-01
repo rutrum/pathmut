@@ -62,6 +62,34 @@ fn main() -> ExitCode {
                 } else if !answer {
                     return ExitCode::FAILURE;
                 }
+            } else if let Command::Has = cmd {
+                let mut paths = cmd_args
+                    .get_many::<OsString>("path")
+                    .expect("required")
+                    .map(|path| path.as_encoded_bytes())
+                    .map(TypedPath::derive);
+
+                let component = cmd_args
+                    .get_one::<Component>("component")
+                    .expect("required");
+                let all = cmd_args.get_flag("all");
+                let print = cmd_args.get_flag("print");
+
+                let answer = if all {
+                    paths.all(|path| component.has(&path))
+                } else {
+                    paths.any(|path| component.has(&path))
+                };
+
+                if print {
+                    if answer {
+                        println!("true");
+                    } else {
+                        println!("false");
+                    }
+                } else if !answer {
+                    return ExitCode::FAILURE;
+                }
             } else {
                 let component = cmd_args
                     .get_one::<Component>("component")
@@ -285,6 +313,62 @@ mod test {
             pathmut(&["1", "my/path/file.txt"])
                 .success()
                 .stdout("path\n");
+        }
+    }
+
+    mod has {
+        use super::*;
+
+        #[test]
+        fn ext() {
+            pathmut(&["has", "ext", "/my/path/file.txt"]).success();
+            pathmut(&["has", "ext", "/my/path/file.tar.gz"]).success();
+            pathmut(&["has", "ext", "/my/path/file"]).failure();
+        }
+
+        #[test]
+        fn stem() {
+            pathmut(&["has", "stem", "/my/path/file.txt"]).success();
+            pathmut(&["has", "stem", "/my/path/file.tar.gz"]).success();
+            pathmut(&["has", "stem", "/my/path"]).success();
+            pathmut(&["has", "stem", "/"]).failure();
+        }
+
+        #[test]
+        fn prefix() {
+            pathmut(&["has", "prefix", "/my/path/file.txt"]).success();
+            pathmut(&["has", "prefix", "/my/path/file.tar.gz"]).success();
+            pathmut(&["has", "prefix", "/my/path"]).success();
+            pathmut(&["has", "prefix", "/"]).failure();
+        }
+
+        #[test]
+        fn name() {
+            pathmut(&["has", "name", "/my/path/file.txt"]).success();
+            pathmut(&["has", "name", "/my/path/dir"]).success();
+            pathmut(&["has", "name", "/"]).failure();
+        }
+
+        #[test]
+        fn parent() {
+            pathmut(&["has", "parent", "/my/path/file.txt"]).success();
+            pathmut(&["has", "parent", "/my/path/dir"]).success();
+            pathmut(&["has", "parent", "/my"]).success();
+            pathmut(&["has", "parent", "/"]).failure();
+        }
+
+        #[test]
+        fn nth_0() {
+            pathmut(&["has", "0", "/"]).success();
+            pathmut(&["has", "0", "/my/path/file.txt"]).success();
+            pathmut(&["has", "0", "my/path/file.txt"]).success();
+        }
+
+        #[test]
+        fn nth_1() {
+            pathmut(&["has", "1", "/"]).failure();
+            pathmut(&["has", "1", "/my/path/file.txt"]).success();
+            pathmut(&["has", "1", "my/path/file.txt"]).success();
         }
     }
 

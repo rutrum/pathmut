@@ -14,6 +14,7 @@ pub fn build() -> Command {
             replace_command(),
             set_command(),
             is_command(),
+            has_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -64,7 +65,15 @@ pub fn get_command() -> Command {
         .arg_required_else_help(true)
         .args([component_arg(), path_arg()])
         .after_help(components_help_section())
-    //.subcommands(component::all())
+}
+
+pub fn has_command() -> Command {
+    Command::new("has")
+        .about("Check if a file component exists")
+        .arg_required_else_help(true)
+        .args(true_false_args())
+        .args([component_arg(), path_arg()])
+        .after_help(components_help_section())
 }
 
 fn remove_command() -> Command {
@@ -99,7 +108,7 @@ fn set_command() -> Command {
         .after_help(components_help_section())
 }
 
-fn is_command() -> Command {
+fn true_false_args() -> [Arg; 3] {
     let any = Arg::new("any")
         .help("[default] True if one path succeeds")
         .long("any")
@@ -109,14 +118,17 @@ fn is_command() -> Command {
         .long("all")
         .action(ArgAction::SetTrue)
         .conflicts_with("any");
-
     let print = Arg::new("print")
         .help("Print 'true' or 'false' to stdout instead of exit code")
         .short('p')
         .long("print")
         .action(ArgAction::SetTrue);
+    [any, all, print]
+}
 
+fn is_command() -> Command {
     Command::new("is")
         .about("Ask questions about a file path")
-        .args([any, all, print, question_arg(), path_arg()])
+        .args(true_false_args())
+        .args([question_arg(), path_arg()])
 }
