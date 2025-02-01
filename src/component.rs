@@ -258,6 +258,7 @@ pub enum Action<'a> {
     Replace(&'a [u8]),
 }
 
+/*
 pub mod set {
     use std::ffi::{OsStr, OsString};
     use std::iter;
@@ -445,3 +446,5 @@ pub mod replace {
         }
     }
 }
+
+*/

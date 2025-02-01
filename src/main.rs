@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
 use std::str;
-use typed_path::{TypedPath, TypedPathBuf};
+use typed_path::{PathBuf, TypedPath, TypedPathBuf};
 
 use pathmut::*;
 
@@ -12,7 +12,6 @@ fn main() -> ExitCode {
     let app = build_app();
     let stdin = io::stdin();
 
-    /*
     // manually fetch args, so it can be overwritten by piped input
     let mut args: Vec<String> = env::args_os().map(|x| x.into_string().unwrap()).collect();
 
@@ -28,15 +27,21 @@ fn main() -> ExitCode {
     }
 
     let matches = app.get_matches_from(args.clone());
-    */
-    let matches = app.get_matches();
+
+    //let matches = app.get_matches();
 
     if let Some((cmd, cmd_args)) = matches.subcommand() {
         // check if cmd is a command or component
         if let Ok(cmd) = Command::try_from(cmd) {
             // if command is is
             if let Command::Is = cmd {
-                let mut paths = cmd_args.get_many::<TypedPathBuf>("path").expect("required");
+                let mut paths = cmd_args
+                    .get_many::<OsString>("path")
+                    .expect("required")
+                    .into_iter()
+                    .map(|path| path.as_encoded_bytes())
+                    .map(TypedPath::derive);
+
                 let question = cmd_args.get_one::<Question>("question").expect("required");
                 let all = cmd_args.get_flag("all");
                 let print = cmd_args.get_flag("print");
@@ -91,17 +96,16 @@ fn main() -> ExitCode {
             }
         } else {
             // assume subcommand is get
-            //let matches = get_command().get_matches_from(args);
-            /*
-            let matches = get_command().get_matches();
+            let matches = get_command().get_matches_from(args);
 
-            let component = matches.get_one::<Component>("component").expect("required");
-            let paths = matches.get_one::<TypedPathBuf>("path").expect("required");
             let action = Action::Get;
+            let component = matches.get_one::<Component>("component").expect("required");
 
-            let result = do_component_action(*component, action, paths);
-            println!("{}", result);
-            */
+            let path = matches.get_one::<OsString>("path").expect("required");
+            let typed_path = TypedPath::derive(path.as_encoded_bytes());
+
+            let result = component.action(action, &typed_path);
+            println!("{}", String::from_utf8_lossy(&result));
         }
     }
 
