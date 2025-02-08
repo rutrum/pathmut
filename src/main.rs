@@ -298,6 +298,12 @@ mod test {
         }
 
         #[test]
+        fn nth_n1() {
+            // can't use hyphens in subcommands
+            pathmut(&["-1", "/"]).failure();
+        }
+
+        #[test]
         fn nth_0() {
             pathmut(&["0", "/"]).success().stdout("/\n");
             pathmut(&["0", "/my/path/file.txt"]).success().stdout("/\n");
@@ -355,6 +361,18 @@ mod test {
             pathmut(&["has", "parent", "/my/path/dir"]).success();
             pathmut(&["has", "parent", "/my"]).success();
             pathmut(&["has", "parent", "/"]).failure();
+        }
+
+        #[test]
+        fn nth_n2() {
+            pathmut(&["has", "-2", "/"]).failure();
+            pathmut(&["has", "-2", "/my/path/file.txt"]).success();
+        }
+
+        #[test]
+        fn nth_n1() {
+            pathmut(&["has", "-1", "/"]).success();
+            pathmut(&["has", "-1", "/my/path/file.txt"]).success();
         }
 
         #[test]
@@ -440,6 +458,20 @@ mod test {
         }
 
         #[test]
+        fn nth_n1() {
+            pathmut(&["get", "-1", "/"]).success().stdout("/\n");
+            pathmut(&["get", "-1", "/my/path/file.txt"])
+                .success()
+                .stdout("file.txt\n");
+            pathmut(&["get", "-1", "my/path/file.txt"])
+                .success()
+                .stdout("file.txt\n");
+            pathmut(&["get", "-1", "my/path/file"])
+                .success()
+                .stdout("file\n");
+        }
+
+        #[test]
         fn nth_0() {
             pathmut(&["get", "0", "/"]).success().stdout("/\n");
             pathmut(&["get", "0", "/my/path/file.txt"])
@@ -459,6 +491,47 @@ mod test {
             pathmut(&["get", "1", "my/path/file.txt"])
                 .success()
                 .stdout("path\n");
+        }
+
+        #[test]
+        fn nth_last() {
+            pathmut(&["get", "0", "/"]).success().stdout("/\n");
+            pathmut(&["get", "3", "/my/path/file.txt"])
+                .success()
+                .stdout("file.txt\n");
+            pathmut(&["get", "2", "my/path/file.txt"])
+                .success()
+                .stdout("file.txt\n");
+            pathmut(&["get", "2", "my/path/file"])
+                .success()
+                .stdout("file\n");
+        }
+
+        #[test]
+        fn nth_outside() {
+            // index == 1 more than num components
+            pathmut(&["get", "1", "/"]).success().stdout("\n");
+            pathmut(&["get", "4", "/my/path/file.txt"])
+                .success()
+                .stdout("\n");
+            pathmut(&["get", "3", "my/path/file.txt"])
+                .success()
+                .stdout("\n");
+            pathmut(&["get", "3", "my/path/file"])
+                .success()
+                .stdout("\n");
+
+            // index == - num components
+            pathmut(&["get", "-2", "/"]).success().stdout("\n");
+            pathmut(&["get", "-5", "/my/path/file.txt"])
+                .success()
+                .stdout("\n");
+            pathmut(&["get", "-4", "my/path/file.txt"])
+                .success()
+                .stdout("\n");
+            pathmut(&["get", "-4", "my/path/file"])
+                .success()
+                .stdout("\n");
         }
     }
 
@@ -516,6 +589,19 @@ mod test {
             pathmut(&["delete", "parent", "/my/path/"])
                 .success()
                 .stdout("path\n");
+        }
+
+        #[test]
+        fn nth_n1() {
+            pathmut(&["delete", "-1", "/my/path/file.txt"])
+                .success()
+                .stdout("/my/path\n");
+            pathmut(&["delete", "-1", "my/path/file.txt"])
+                .success()
+                .stdout("my/path\n");
+            pathmut(&["delete", "-1", "file.txt"])
+                .success()
+                .stdout("\n");
         }
 
         #[test]
@@ -596,6 +682,18 @@ mod test {
             pathmut(&["replace", "new", "parent", "/my/path"])
                 .success()
                 .stdout("new/path\n");
+        }
+
+        #[test]
+        fn nth_n1() {
+            pathmut(&["replace", "new/dir", "-1", "/my/path/file.txt"])
+                .success()
+                .stdout("/my/path/new/dir\n");
+
+            // replacing a later component with root makes it root
+            pathmut(&["replace", "/", "-1", "my/path/file.txt"])
+                .success()
+                .stdout("/\n");
         }
 
         #[test]
@@ -691,6 +789,19 @@ mod test {
         }
 
         #[test]
+        fn nth_n1() {
+            pathmut(&["set", "new/dir", "-1", "/my/path/file.txt"])
+                .success()
+                .stdout("/my/path/new/dir\n");
+            pathmut(&["set", "new/dir", "-1", "/my/path/file"])
+                .success()
+                .stdout("/my/path/new/dir\n");
+            pathmut(&["set", "/", "-1", "my/path/file.txt"])
+                .success()
+                .stdout("/\n");
+        }
+
+        #[test]
         fn nth_0() {
             pathmut(&["set", "new/dir", "0", "/my/path/file.txt"])
                 .success()
@@ -724,6 +835,10 @@ mod test {
             pathmut(&["set", "/", "2", "my/path/file.txt"])
                 .success()
                 .stdout("/\n");
+
+            // TODO: should this error or not?
+            // this is two things: setting any thing >= num components to root is root
+            // setting something at num_components feels like "insertion"
             pathmut(&["set", "/", "3", "my/path/file.txt"])
                 .success()
                 .stdout("/\n");

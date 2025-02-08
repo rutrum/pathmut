@@ -65,7 +65,11 @@ I should be able to work with multiple paths:
 
 ## Changelog
 
-### v0.5.0
+### 0.6.0
+
+* Specify nth component using negative indicies to count backwards, `-1` for last component, etc.
+
+### 0.5.0
 
 * Rename `replace` to `set`
 * Add `replace` command, which does not change paths when the component does not exist
@@ -75,7 +79,7 @@ I should be able to work with multiple paths:
     * `--any` and `--all` flags for testing multiple paths
 * Add `has` command for checking if a path component exists
 
-### v0.4.0
+### 0.4.0
 
 * Remove `--remove` and `--replace` args with `delete` and `replace` commands
 * Add `get` command (default behavior)
@@ -83,19 +87,19 @@ I should be able to work with multiple paths:
 * Specify nth component by using number, `0` for first component, etc.
 * Remove `first` component
 
-### v0.3.0
+### 0.3.0
 
 * Add `first` command
 * Add `--remove` and `--replace` arguments for every command
 * Remove `rmext` command
 
-### v0.2.0
+### 0.2.0
 
 * Show help by default
 * Read from stdin, all at once
 * Allow passing multiple file paths as args (not stdin)
 * Add `rmext` command
 
-### v0.1.0
+### 0.1.0
 
 * Add `ext`, `stem`, `prefix`, `name`, `parent` commands.

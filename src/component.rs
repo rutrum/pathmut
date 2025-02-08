@@ -11,7 +11,7 @@ pub enum Component {
     Parent,
     // Root
     // The windows prefix
-    Nth(usize),
+    Nth(isize),
 }
 
 // may not need this because of ValueEnum
@@ -26,7 +26,7 @@ impl TryFrom<&str> for Component {
             "prefix" => Prefix,
             "name" => Name,
             "parent" => Parent,
-            _ => Nth(s.parse::<usize>().map_err(|_| ())?),
+            _ => Nth(s.parse::<isize>().map_err(|_| ())?),
         };
         Ok(comp)
     }
@@ -34,7 +34,7 @@ impl TryFrom<&str> for Component {
 
 pub fn arg_into_component(s: &str) -> Result<Component, String> {
     use Component::*;
-    if let Ok(n) = s.parse::<usize>() {
+    if let Ok(n) = s.parse::<isize>() {
         Ok(Nth(n))
     } else {
         let component = match s {
@@ -117,11 +117,24 @@ impl Component {
                 .parent()
                 .map(|p| p.as_bytes().to_vec())
                 .unwrap_or_default(),
-            Nth(n) => path
-                .components()
-                .nth(n)
-                .map(|c| c.as_bytes().to_vec())
-                .unwrap_or_default(),
+            Nth(n) => {
+                let num_components: usize = path.components().count();
+                let index: usize = if n >= 0 {
+                    let positive: usize = n.try_into().unwrap();
+                    positive
+                } else {
+                    let positive: usize = (-n).try_into().unwrap();
+                    if positive > num_components {
+                        // index is behind first component
+                        return Vec::new();
+                    }
+                    num_components - positive
+                };
+                path.components()
+                    .nth(index)
+                    .map(|c| c.as_bytes().to_vec())
+                    .unwrap_or_default()
+            }
         }
     }
 
@@ -178,9 +191,22 @@ impl Component {
                 // what if path is root?
                 // todo
 
+                let num_components: usize = path.components().count();
+                let index: usize = if n >= 0 {
+                    let positive: usize = n.try_into().unwrap();
+                    positive
+                } else {
+                    let positive: usize = (-n).try_into().unwrap();
+                    if positive > num_components {
+                        // index is behind first component
+                        return Vec::new();
+                    }
+                    num_components - positive
+                };
+
                 // what if n == number of components?
                 let num_components = path.components().count();
-                if num_components == n {
+                if num_components == index {
                     return path.join(value).into_vec();
                 }
 
@@ -190,7 +216,7 @@ impl Component {
                 path.components()
                     .enumerate()
                     .map(|(i, c)| {
-                        if i == n {
+                        if i == index {
                             TypedPathBuf::from(value)
                         } else {
                             TypedPathBuf::from(c.as_bytes())

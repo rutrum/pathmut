@@ -2,7 +2,7 @@ default: run
 
 test *ARGS:
     cargo build
-    cargo test -- {{ARGS}}
+    cargo test -q -- {{ARGS}}
 
 watch *ARGS:
     watchexec -c -w src -- just test {{ARGS}}

@@ -21,7 +21,6 @@ pub fn build() -> Command {
         .subcommand_value_name("COMMAND or COMPONENT")
         .allow_external_subcommands(true)
         .after_help(components_help_section())
-    // could add custom list of components here
 }
 
 fn components_help_section() -> &'static str {
@@ -34,11 +33,20 @@ fn components_help_section() -> &'static str {
     \x20 \x1B[1;3mn\x1B[0m        Ordinal of the nth component\n"
 }
 
+fn questions_help_section() -> &'static str {
+    "\x1B[4;1mQuestions:\x1B[0m\n\
+    \x20 \x1B[1mabsolute\x1B[0m\n\
+    \x20 \x1B[1mrelative\x1B[0m\n\
+    \x20 \x1B[1munix\x1B[0m\n\
+    \x20 \x1B[1mwindows\x1B[0m\n"
+}
+
 fn component_arg() -> Arg {
     // todo: figure out way to list possible values
     Arg::new("component")
         .required(true)
         .value_parser(arg_into_component)
+        .allow_negative_numbers(true)
         //.value_parser(value_parser!(Component))
         .help("Path component")
 }
@@ -129,6 +137,8 @@ fn true_false_args() -> [Arg; 3] {
 fn is_command() -> Command {
     Command::new("is")
         .about("Ask questions about a file path")
+        .arg_required_else_help(true)
         .args(true_false_args())
         .args([question_arg(), path_arg()])
+        .after_help(questions_help_section())
 }
