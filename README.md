@@ -68,6 +68,8 @@ I should be able to work with multiple paths:
 ### 0.6.0
 
 * Specify nth component using negative indicies to count backwards, `-1` for last component, etc.
+* Add `normalize` command that removes `..` and `.` from path appropriately
+* Add `convert` command to convert between Windows and unix paths
 
 ### 0.5.0
 

@@ -1,6 +1,7 @@
 use clap::builder::ValueParser;
 use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 
+use crate::command::PathKind;
 use crate::command::Question;
 use crate::component::arg_into_component;
 
@@ -16,6 +17,7 @@ pub fn build() -> Command {
             has_command(),
             is_command(),
             normalize_command(),
+            convert_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -149,4 +151,18 @@ fn normalize_command() -> Command {
         .about("Normalize a file path")
         .arg_required_else_help(true)
         .arg(path_arg())
+}
+
+fn path_type_arg() -> Arg {
+    Arg::new("type")
+        .help("Type of path")
+        .required(true)
+        .value_parser(value_parser!(PathKind))
+}
+
+fn convert_command() -> Command {
+    Command::new("convert")
+        .about("Convert between unix and windows paths")
+        .arg_required_else_help(true)
+        .args([path_type_arg(), path_arg()])
 }

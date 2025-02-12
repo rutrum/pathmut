@@ -2,7 +2,7 @@ use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
-use typed_path::TypedPath;
+use typed_path::{PathType, TypedPath};
 
 use pathmut::*;
 
@@ -99,6 +99,23 @@ fn main() -> ExitCode {
                         .expect("required")
                         .map(|path| TypedPath::derive(path.as_encoded_bytes()).normalize())
                         .for_each(|path| println!("{}", path.to_string_lossy()));
+                }
+                Command::Convert => {
+                    let path_type: PathType =
+                        (*cmd_args.get_one::<PathKind>("type").expect("required")).into();
+
+                    let paths = cmd_args
+                        .get_many::<OsString>("path")
+                        .expect("required")
+                        .map(|path| TypedPath::derive(path.as_encoded_bytes()));
+
+                    for path in paths {
+                        let converted = match path_type {
+                            PathType::Unix => path.to_path_buf().with_unix_encoding(),
+                            PathType::Windows => path.to_path_buf().with_windows_encoding(),
+                        };
+                        println!("{}", converted.to_string_lossy());
+                    }
                 }
                 Command::Get | Command::Delete | Command::Replace | Command::Set => {
                     let component = cmd_args
@@ -886,6 +903,22 @@ mod test {
         pathmut(&["get", "parent", "my/path/../file.txt"])
             .success()
             .stdout("my/path/..\n");
+    }
+
+    #[test]
+    fn convert() {
+        pathmut(&["convert", "unix", "my/path/file.txt"])
+            .success()
+            .stdout("my/path/file.txt\n");
+        pathmut(&["convert", "win", "my/path/file.txt"])
+            .success()
+            .stdout("my\\path\\file.txt\n");
+        pathmut(&["convert", "unix", "\\my\\path\\file.txt"])
+            .success()
+            .stdout("/my/path/file.txt\n");
+        pathmut(&["convert", "win", "my\\path\\file.txt"])
+            .success()
+            .stdout("my\\path\\file.txt\n");
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use clap::builder::PossibleValue;
 use clap::ValueEnum;
+use typed_path::PathType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
@@ -10,7 +11,7 @@ pub enum Command {
     Has,
     Is,
     Normalize,
-    //Convert,
+    Convert,
 }
 
 impl TryFrom<&str> for Command {
@@ -26,6 +27,7 @@ impl TryFrom<&str> for Command {
             "has" => Has,
             "is" => Is,
             "normalize" => Normalize,
+            "convert" => Convert,
             _ => Err(())?,
         };
         Ok(command)
@@ -43,7 +45,7 @@ impl ValueEnum for Command {
             Command::Has,
             Command::Is,
             Command::Normalize,
-            // Command::Convert,
+            Command::Convert,
         ]
     }
 
@@ -57,6 +59,7 @@ impl ValueEnum for Command {
             Has => "has",
             Is => "is",
             Normalize => "normalize",
+            Convert => "convert",
         };
         Some(PossibleValue::new(s))
     }
@@ -87,6 +90,35 @@ impl ValueEnum for Question {
             Relative => "relative",
             Unix => "unix",
             Windows => "windows",
+        };
+        Some(PossibleValue::new(s))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathKind {
+    Unix,
+    Windows,
+}
+
+impl Into<PathType> for PathKind {
+    fn into(self) -> PathType {
+        match self {
+            Self::Unix => PathType::Unix,
+            Self::Windows => PathType::Windows,
+        }
+    }
+}
+
+impl ValueEnum for PathKind {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[PathKind::Unix, PathKind::Windows]
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        let s = match self {
+            Self::Unix => "unix",
+            Self::Windows => "win",
         };
         Some(PossibleValue::new(s))
     }
