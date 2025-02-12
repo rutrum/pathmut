@@ -66,6 +66,9 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 // TODO: rewrite the following to use [u8] instead of OsStr
 
 trait FilePrefix {
+    // TODO: consider if this is the right name,
+    // since it conflicts with WindowsPrefix
+    // is this even a useful component?
     fn file_prefix(&self) -> Option<&[u8]>;
 }
 

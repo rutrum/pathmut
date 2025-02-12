@@ -15,6 +15,7 @@ pub fn build() -> Command {
             set_command(),
             has_command(),
             is_command(),
+            normalize_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -141,4 +142,11 @@ fn is_command() -> Command {
         .args(true_false_args())
         .args([question_arg(), path_arg()])
         .after_help(questions_help_section())
+}
+
+fn normalize_command() -> Command {
+    Command::new("normalize")
+        .about("Normalize a file path")
+        .arg_required_else_help(true)
+        .arg(path_arg())
 }

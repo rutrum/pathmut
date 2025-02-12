@@ -32,97 +32,108 @@ fn main() -> ExitCode {
         // check if cmd is a command or component
         if let Ok(cmd) = Command::try_from(cmd) {
             // if command is is
-            if let Command::Is = cmd {
-                let mut paths = cmd_args
-                    .get_many::<OsString>("path")
-                    .expect("required")
-                    .map(|path| path.as_encoded_bytes())
-                    .map(TypedPath::derive);
+            match cmd {
+                Command::Is => {
+                    let mut paths = cmd_args
+                        .get_many::<OsString>("path")
+                        .expect("required")
+                        .map(|path| path.as_encoded_bytes())
+                        .map(TypedPath::derive);
 
-                let question = cmd_args.get_one::<Question>("question").expect("required");
-                let all = cmd_args.get_flag("all");
-                let print = cmd_args.get_flag("print");
+                    let question = cmd_args.get_one::<Question>("question").expect("required");
+                    let all = cmd_args.get_flag("all");
+                    let print = cmd_args.get_flag("print");
 
-                let answer = match (question, all) {
-                    (Question::Absolute, true) => paths.all(|path| path.is_absolute()),
-                    (Question::Absolute, false) => paths.any(|path| path.is_absolute()),
-                    (Question::Relative, true) => paths.all(|path| path.is_relative()),
-                    (Question::Relative, false) => paths.any(|path| path.is_relative()),
-                    (Question::Unix, true) => paths.all(|path| path.is_unix()),
-                    (Question::Unix, false) => paths.any(|path| path.is_unix()),
-                    (Question::Windows, true) => paths.all(|path| path.is_windows()),
-                    (Question::Windows, false) => paths.any(|path| path.is_windows()),
-                };
-                if print {
-                    if answer {
-                        println!("true");
-                    } else {
-                        println!("false");
+                    let answer = match (question, all) {
+                        (Question::Absolute, true) => paths.all(|path| path.is_absolute()),
+                        (Question::Absolute, false) => paths.any(|path| path.is_absolute()),
+                        (Question::Relative, true) => paths.all(|path| path.is_relative()),
+                        (Question::Relative, false) => paths.any(|path| path.is_relative()),
+                        (Question::Unix, true) => paths.all(|path| path.is_unix()),
+                        (Question::Unix, false) => paths.any(|path| path.is_unix()),
+                        (Question::Windows, true) => paths.all(|path| path.is_windows()),
+                        (Question::Windows, false) => paths.any(|path| path.is_windows()),
+                    };
+                    if print {
+                        if answer {
+                            println!("true");
+                        } else {
+                            println!("false");
+                        }
+                    } else if !answer {
+                        return ExitCode::FAILURE;
                     }
-                } else if !answer {
-                    return ExitCode::FAILURE;
                 }
-            } else if let Command::Has = cmd {
-                let mut paths = cmd_args
-                    .get_many::<OsString>("path")
-                    .expect("required")
-                    .map(|path| path.as_encoded_bytes())
-                    .map(TypedPath::derive);
+                Command::Has => {
+                    let mut paths = cmd_args
+                        .get_many::<OsString>("path")
+                        .expect("required")
+                        .map(|path| path.as_encoded_bytes())
+                        .map(TypedPath::derive);
 
-                let component = cmd_args
-                    .get_one::<Component>("component")
-                    .expect("required");
-                let all = cmd_args.get_flag("all");
-                let print = cmd_args.get_flag("print");
+                    let component = cmd_args
+                        .get_one::<Component>("component")
+                        .expect("required");
+                    let all = cmd_args.get_flag("all");
+                    let print = cmd_args.get_flag("print");
 
-                let answer = if all {
-                    paths.all(|path| component.has(&path))
-                } else {
-                    paths.any(|path| component.has(&path))
-                };
-
-                if print {
-                    if answer {
-                        println!("true");
+                    let answer = if all {
+                        paths.all(|path| component.has(&path))
                     } else {
-                        println!("false");
+                        paths.any(|path| component.has(&path))
+                    };
+
+                    if print {
+                        if answer {
+                            println!("true");
+                        } else {
+                            println!("false");
+                        }
+                    } else if !answer {
+                        return ExitCode::FAILURE;
                     }
-                } else if !answer {
-                    return ExitCode::FAILURE;
                 }
-            } else {
-                let component = cmd_args
-                    .get_one::<Component>("component")
-                    .expect("required");
+                Command::Normalize => {
+                    cmd_args
+                        .get_many::<OsString>("path")
+                        .expect("required")
+                        .map(|path| TypedPath::derive(path.as_encoded_bytes()).normalize())
+                        .for_each(|path| println!("{}", path.to_string_lossy()));
+                }
+                Command::Get | Command::Delete | Command::Replace | Command::Set => {
+                    let component = cmd_args
+                        .get_one::<Component>("component")
+                        .expect("required");
 
-                // This requires manual labor
-                let paths = cmd_args
-                    .get_many::<OsString>("path")
-                    .expect("required")
-                    .map(|path| path.as_encoded_bytes())
-                    .map(TypedPath::derive);
+                    // This requires manual labor
+                    let paths = cmd_args
+                        .get_many::<OsString>("path")
+                        .expect("required")
+                        .map(|path| path.as_encoded_bytes())
+                        .map(TypedPath::derive);
 
-                let action = match cmd {
-                    Command::Get => Action::Get,
-                    Command::Delete => Action::Delete,
-                    Command::Replace => Action::Replace(
-                        cmd_args
-                            .get_one::<OsString>("str")
-                            .expect("required")
-                            .as_encoded_bytes(),
-                    ),
-                    Command::Set => Action::Set(
-                        cmd_args
-                            .get_one::<OsString>("str")
-                            .expect("required")
-                            .as_encoded_bytes(),
-                    ),
-                    _ => unreachable!(),
-                };
+                    let action = match cmd {
+                        Command::Get => Action::Get,
+                        Command::Delete => Action::Delete,
+                        Command::Replace => Action::Replace(
+                            cmd_args
+                                .get_one::<OsString>("str")
+                                .expect("required")
+                                .as_encoded_bytes(),
+                        ),
+                        Command::Set => Action::Set(
+                            cmd_args
+                                .get_one::<OsString>("str")
+                                .expect("required")
+                                .as_encoded_bytes(),
+                        ),
+                        _ => unreachable!(),
+                    };
 
-                let results = paths.map(|path| component.action(&action, &path));
-                for result in results {
-                    println!("{}", String::from_utf8_lossy(&result));
+                    let results = paths.map(|path| component.action(&action, &path));
+                    for result in results {
+                        println!("{}", String::from_utf8_lossy(&result));
+                    }
                 }
             }
         } else {
@@ -843,6 +854,38 @@ mod test {
                 .success()
                 .stdout("/\n");
         }
+    }
+
+    #[test]
+    fn normalize() {
+        pathmut(&["normalize", "my/path/file.txt"])
+            .success()
+            .stdout("my/path/file.txt\n");
+        pathmut(&["normalize", r"C:\my\path\file.txt"])
+            .success()
+            .stdout("C:\\my\\path\\file.txt\n");
+        pathmut(&["normalize", "my/path/.."])
+            .success()
+            .stdout("my\n");
+        pathmut(&["normalize", r"C:\my\path\.."])
+            .success()
+            .stdout("C:\\my\n");
+        pathmut(&["normalize", "my/./path"])
+            .success()
+            .stdout("my/path\n");
+        pathmut(&["normalize", r"C:\my\.\path"])
+            .success()
+            .stdout("C:\\my\\path\n");
+    }
+
+    #[test]
+    fn normalize_not_default() {
+        pathmut(&["get", "parent", "my/path/./dir/file.txt"])
+            .success()
+            .stdout("my/path/./dir\n");
+        pathmut(&["get", "parent", "my/path/../file.txt"])
+            .success()
+            .stdout("my/path/..\n");
     }
 
     #[test]
