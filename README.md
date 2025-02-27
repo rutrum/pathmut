@@ -52,10 +52,6 @@ I should be able to ask questions about path strings, like the following:
 * Is the path valid, if it did exist?
 * What is the depth of the path?
 
-I should be able to manipulate paths as a whole:
-
-* I should canonicalize a path (remove redundant `../` and `./`)
-
 I should be able to work with multiple paths:
 
 * Does path A begin with path B?

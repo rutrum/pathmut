@@ -919,6 +919,9 @@ mod test {
         pathmut(&["convert", "win", "my\\path\\file.txt"])
             .success()
             .stdout("my\\path\\file.txt\n");
+        pathmut(&["convert", "unix", "C:\\my\\path\\file.txt"])
+            .success()
+            .stdout("/my/path/file.txt\n");
     }
 
     #[test]
