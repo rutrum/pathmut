@@ -61,6 +61,10 @@ I should be able to work with multiple paths:
 
 ## Changelog
 
+### 0.7.0
+
+* Normalize flag `-n` that can apply normalization to the paths before any command
+
 ### 0.6.0
 
 * Specify nth component using negative indicies to count backwards, `-1` for last component, etc.

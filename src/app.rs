@@ -9,6 +9,7 @@ pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
         .about("Mutates path strings")
+        .args([normalize_arg()])
         .subcommands([
             get_command(),
             remove_command(),
@@ -18,12 +19,26 @@ pub fn build() -> Command {
             is_command(),
             normalize_command(),
             convert_command(),
+            //info_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
         .subcommand_value_name("COMMAND or COMPONENT")
         .allow_external_subcommands(true)
         .after_help(components_help_section())
+}
+
+//fn info_command -> Command {
+//    Command::new("info")
+//}
+
+fn normalize_arg() -> Arg {
+    Arg::new("normalize")
+        .global(true)
+        .short('n')
+        .long("normalize")
+        .action(ArgAction::SetTrue)
+        .help("Normalize the path first")
 }
 
 fn components_help_section() -> &'static str {
@@ -74,7 +89,7 @@ pub fn get_command() -> Command {
     Command::new("get")
         .about("Read a path component [default]")
         .arg_required_else_help(true)
-        .args([component_arg(), path_arg()])
+        .args([normalize_arg(), component_arg(), path_arg()])
         .after_help(components_help_section())
 }
 

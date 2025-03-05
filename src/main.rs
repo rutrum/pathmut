@@ -26,6 +26,10 @@ fn main() -> ExitCode {
 
     let matches = app.get_matches_from(args.clone());
 
+    let normalized_first = *matches.get_one::<bool>("normalize").unwrap();
+
+    // can I hoist the path work up here?  Can I parse paths upfront?
+
     //let matches = app.get_matches();
 
     if let Some((cmd, cmd_args)) = matches.subcommand() {
@@ -38,7 +42,14 @@ fn main() -> ExitCode {
                         .get_many::<OsString>("path")
                         .expect("required")
                         .map(|path| path.as_encoded_bytes())
-                        .map(TypedPath::derive);
+                        .map(TypedPath::derive)
+                        .map(|path| {
+                            if normalized_first {
+                                path.normalize()
+                            } else {
+                                path.to_path_buf()
+                            }
+                        });
 
                     let question = cmd_args.get_one::<Question>("question").expect("required");
                     let all = cmd_args.get_flag("all");
@@ -69,7 +80,14 @@ fn main() -> ExitCode {
                         .get_many::<OsString>("path")
                         .expect("required")
                         .map(|path| path.as_encoded_bytes())
-                        .map(TypedPath::derive);
+                        .map(TypedPath::derive)
+                        .map(|path| {
+                            if normalized_first {
+                                path.normalize()
+                            } else {
+                                path.to_path_buf()
+                            }
+                        });
 
                     let component = cmd_args
                         .get_one::<Component>("component")
@@ -78,9 +96,9 @@ fn main() -> ExitCode {
                     let print = cmd_args.get_flag("print");
 
                     let answer = if all {
-                        paths.all(|path| component.has(&path))
+                        paths.all(|path| component.has(&path.to_path()))
                     } else {
-                        paths.any(|path| component.has(&path))
+                        paths.any(|path| component.has(&path.to_path()))
                     };
 
                     if print {
@@ -107,12 +125,19 @@ fn main() -> ExitCode {
                     let paths = cmd_args
                         .get_many::<OsString>("path")
                         .expect("required")
-                        .map(|path| TypedPath::derive(path.as_encoded_bytes()));
+                        .map(|path| TypedPath::derive(path.as_encoded_bytes()))
+                        .map(|path| {
+                            if normalized_first {
+                                path.normalize()
+                            } else {
+                                path.to_path_buf()
+                            }
+                        });
 
                     for path in paths {
                         let converted = match path_type {
-                            PathType::Unix => path.to_path_buf().with_unix_encoding(),
-                            PathType::Windows => path.to_path_buf().with_windows_encoding(),
+                            PathType::Unix => path.with_unix_encoding(),
+                            PathType::Windows => path.with_windows_encoding(),
                         };
                         println!("{}", converted.to_string_lossy());
                     }
@@ -127,7 +152,14 @@ fn main() -> ExitCode {
                         .get_many::<OsString>("path")
                         .expect("required")
                         .map(|path| path.as_encoded_bytes())
-                        .map(TypedPath::derive);
+                        .map(TypedPath::derive)
+                        .map(|path| {
+                            if normalized_first {
+                                path.normalize()
+                            } else {
+                                path.to_path_buf()
+                            }
+                        });
 
                     let action = match cmd {
                         Command::Get => Action::Get,
@@ -147,7 +179,7 @@ fn main() -> ExitCode {
                         _ => unreachable!(),
                     };
 
-                    let results = paths.map(|path| component.action(&action, &path));
+                    let results = paths.map(|path| component.action(&action, &path.to_path()));
                     for result in results {
                         println!("{}", String::from_utf8_lossy(&result));
                     }
@@ -160,10 +192,18 @@ fn main() -> ExitCode {
             let action = Action::Get;
             let component = matches.get_one::<Component>("component").expect("required");
 
+            // fix this for multiple paths
             let path = matches.get_one::<OsString>("path").expect("required");
-            let typed_path = TypedPath::derive(path.as_encoded_bytes());
+            let typed_path = {
+                let p = TypedPath::derive(path.as_encoded_bytes());
+                if normalized_first {
+                    p.normalize()
+                } else {
+                    p.to_path_buf()
+                }
+            };
 
-            let result = component.action(&action, &typed_path);
+            let result = component.action(&action, &typed_path.to_path());
             println!("{}", String::from_utf8_lossy(&result));
         }
     }
@@ -179,6 +219,22 @@ mod test {
 
     fn pathmut(args: &[&str]) -> Assert {
         Command::cargo_bin("pathmut").unwrap().args(args).assert()
+    }
+
+    #[test]
+    fn normalize_flag() {
+        pathmut(&["-n", "get", "parent", "/path/to/../file.txt"])
+            .success()
+            .stdout("/path\n");
+        pathmut(&["-n", "replace", "md", "ext", "/path/to/../file.txt"])
+            .success()
+            .stdout("/path/file.md\n");
+        pathmut(&["--normalize", "parent", "/path/to/../file.txt"])
+            .success()
+            .stdout("/path\n");
+        pathmut(&["-n", "convert", "win", "/path/to/../file.txt"])
+            .success()
+            .stdout("\\path\\file.txt\n");
     }
 
     mod is {
