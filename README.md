@@ -64,6 +64,7 @@ I should be able to work with multiple paths:
 ### 0.7.0
 
 * Normalize flag `-n` that can apply normalization to the paths before any command
+* Flags to force parsing paths as windows `-w` or as unix `-u` paths
 
 ### 0.6.0
 

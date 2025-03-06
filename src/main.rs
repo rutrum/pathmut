@@ -1,10 +1,40 @@
+use clap::ArgMatches;
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
-use typed_path::{PathType, TypedPath};
+use typed_path::{PathType, TypedPath, TypedPathBuf};
 
 use pathmut::*;
+
+#[derive(Debug)]
+enum ParseAs {
+    Derive,
+    Windows,
+    Unix,
+}
+
+fn parse_paths(
+    args: &ArgMatches,
+    normalize: bool,
+    parse_as: ParseAs,
+) -> impl Iterator<Item = TypedPathBuf> + '_ {
+    args.get_many::<OsString>("path")
+        .expect("required")
+        .map(|path| path.as_encoded_bytes())
+        .map(move |path| match parse_as {
+            ParseAs::Derive => TypedPath::derive(path),
+            ParseAs::Windows => TypedPath::windows(path),
+            ParseAs::Unix => TypedPath::unix(path),
+        })
+        .map(move |path| {
+            if normalize {
+                path.normalize()
+            } else {
+                path.to_path_buf()
+            }
+        })
+}
 
 fn main() -> ExitCode {
     let app = build_app();
@@ -27,6 +57,13 @@ fn main() -> ExitCode {
     let matches = app.get_matches_from(args.clone());
 
     let normalized_first = *matches.get_one::<bool>("normalize").unwrap();
+    let parse_as = if *matches.get_one::<bool>("as-windows").unwrap() {
+        ParseAs::Windows
+    } else if *matches.get_one::<bool>("as-unix").unwrap() {
+        ParseAs::Unix
+    } else {
+        ParseAs::Derive
+    };
 
     // can I hoist the path work up here?  Can I parse paths upfront?
 
@@ -38,18 +75,7 @@ fn main() -> ExitCode {
             // if command is is
             match cmd {
                 Command::Is => {
-                    let mut paths = cmd_args
-                        .get_many::<OsString>("path")
-                        .expect("required")
-                        .map(|path| path.as_encoded_bytes())
-                        .map(TypedPath::derive)
-                        .map(|path| {
-                            if normalized_first {
-                                path.normalize()
-                            } else {
-                                path.to_path_buf()
-                            }
-                        });
+                    let mut paths = parse_paths(cmd_args, normalized_first, parse_as);
 
                     let question = cmd_args.get_one::<Question>("question").expect("required");
                     let all = cmd_args.get_flag("all");
@@ -76,18 +102,7 @@ fn main() -> ExitCode {
                     }
                 }
                 Command::Has => {
-                    let mut paths = cmd_args
-                        .get_many::<OsString>("path")
-                        .expect("required")
-                        .map(|path| path.as_encoded_bytes())
-                        .map(TypedPath::derive)
-                        .map(|path| {
-                            if normalized_first {
-                                path.normalize()
-                            } else {
-                                path.to_path_buf()
-                            }
-                        });
+                    let mut paths = parse_paths(cmd_args, normalized_first, parse_as);
 
                     let component = cmd_args
                         .get_one::<Component>("component")
@@ -112,27 +127,15 @@ fn main() -> ExitCode {
                     }
                 }
                 Command::Normalize => {
-                    cmd_args
-                        .get_many::<OsString>("path")
-                        .expect("required")
-                        .map(|path| TypedPath::derive(path.as_encoded_bytes()).normalize())
+                    parse_paths(cmd_args, normalized_first, parse_as)
+                        .map(|path| path.normalize())
                         .for_each(|path| println!("{}", path.to_string_lossy()));
                 }
                 Command::Convert => {
                     let path_type: PathType =
                         (*cmd_args.get_one::<PathKind>("type").expect("required")).into();
 
-                    let paths = cmd_args
-                        .get_many::<OsString>("path")
-                        .expect("required")
-                        .map(|path| TypedPath::derive(path.as_encoded_bytes()))
-                        .map(|path| {
-                            if normalized_first {
-                                path.normalize()
-                            } else {
-                                path.to_path_buf()
-                            }
-                        });
+                    let paths = parse_paths(cmd_args, normalized_first, parse_as);
 
                     for path in paths {
                         let converted = match path_type {
@@ -148,18 +151,6 @@ fn main() -> ExitCode {
                         .expect("required");
 
                     // This requires manual labor
-                    let paths = cmd_args
-                        .get_many::<OsString>("path")
-                        .expect("required")
-                        .map(|path| path.as_encoded_bytes())
-                        .map(TypedPath::derive)
-                        .map(|path| {
-                            if normalized_first {
-                                path.normalize()
-                            } else {
-                                path.to_path_buf()
-                            }
-                        });
 
                     let action = match cmd {
                         Command::Get => Action::Get,
@@ -179,7 +170,9 @@ fn main() -> ExitCode {
                         _ => unreachable!(),
                     };
 
-                    let results = paths.map(|path| component.action(&action, &path.to_path()));
+                    let results = parse_paths(cmd_args, normalized_first, parse_as)
+                        .map(|path| component.action(&action, &path.to_path()));
+
                     for result in results {
                         println!("{}", String::from_utf8_lossy(&result));
                     }
@@ -192,19 +185,12 @@ fn main() -> ExitCode {
             let action = Action::Get;
             let component = matches.get_one::<Component>("component").expect("required");
 
-            // fix this for multiple paths
-            let path = matches.get_one::<OsString>("path").expect("required");
-            let typed_path = {
-                let p = TypedPath::derive(path.as_encoded_bytes());
-                if normalized_first {
-                    p.normalize()
-                } else {
-                    p.to_path_buf()
-                }
-            };
+            let results = parse_paths(&matches, normalized_first, parse_as)
+                .map(|path| component.action(&action, &path.to_path()));
 
-            let result = component.action(&action, &typed_path.to_path());
-            println!("{}", String::from_utf8_lossy(&result));
+            for result in results {
+                println!("{}", String::from_utf8_lossy(&result));
+            }
         }
     }
 
@@ -235,6 +221,16 @@ mod test {
         pathmut(&["-n", "convert", "win", "/path/to/../file.txt"])
             .success()
             .stdout("\\path\\file.txt\n");
+    }
+
+    #[test]
+    fn parse_as_flags() {
+        pathmut(&["-w", "get", "parent", "/path/to/file.txt"])
+            .success()
+            .stdout("/path/to\n");
+        pathmut(&["-u", "get", "parent", "C:\\path\\to\\file.txt"])
+            .success()
+            .stdout("\n");
     }
 
     mod is {
@@ -1003,7 +999,13 @@ mod test {
         pathmut(&["get", "ext", "file.txt", "another.png"])
             .success()
             .stdout("txt\npng\n");
+        pathmut(&["ext", "file.txt", "another.png"])
+            .success()
+            .stdout("txt\npng\n");
         pathmut(&["get", "stem", "file.txt", "another.png"])
+            .success()
+            .stdout("file\nanother\n");
+        pathmut(&["stem", "file.txt", "another.png"])
             .success()
             .stdout("file\nanother\n");
         pathmut(&[

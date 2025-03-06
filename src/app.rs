@@ -9,7 +9,7 @@ pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
         .about("Mutates path strings")
-        .args([normalize_arg()])
+        .args([normalize_arg(), parse_as_unix_arg(), parse_as_win_arg()])
         .subcommands([
             get_command(),
             remove_command(),
@@ -39,6 +39,26 @@ fn normalize_arg() -> Arg {
         .long("normalize")
         .action(ArgAction::SetTrue)
         .help("Normalize the path first")
+}
+
+fn parse_as_win_arg() -> Arg {
+    Arg::new("as-windows")
+        .global(true)
+        .short('w')
+        .long("as-windows")
+        .action(ArgAction::SetTrue)
+        .conflicts_with("as-unix")
+        .help("Parse paths as windows paths")
+}
+
+fn parse_as_unix_arg() -> Arg {
+    Arg::new("as-unix")
+        .global(true)
+        .short('u')
+        .long("as-unix")
+        .action(ArgAction::SetTrue)
+        .conflicts_with("as-windows")
+        .help("Parse paths as unix paths")
 }
 
 fn components_help_section() -> &'static str {
