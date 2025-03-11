@@ -19,7 +19,7 @@ pub fn build() -> Command {
             is_command(),
             normalize_command(),
             convert_command(),
-            //info_command(),
+            info_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -27,10 +27,6 @@ pub fn build() -> Command {
         .allow_external_subcommands(true)
         .after_help(components_help_section())
 }
-
-//fn info_command -> Command {
-//    Command::new("info")
-//}
 
 fn normalize_arg() -> Arg {
     Arg::new("normalize")
@@ -76,7 +72,8 @@ fn questions_help_section() -> &'static str {
     \x20 \x1B[1mabsolute\x1B[0m\n\
     \x20 \x1B[1mrelative\x1B[0m\n\
     \x20 \x1B[1munix\x1B[0m\n\
-    \x20 \x1B[1mwindows\x1B[0m\n"
+    \x20 \x1B[1mwindows\x1B[0m\n\
+    \x20 \x1B[1mnormalized\x1B[0m\n"
 }
 
 fn component_arg() -> Arg {
@@ -89,11 +86,11 @@ fn component_arg() -> Arg {
         .help("Path component")
 }
 
-fn path_arg() -> Arg {
+fn paths_arg() -> Arg {
     Arg::new("path")
         .required(true)
         .action(ArgAction::Append)
-        .help("Path strings to mutate")
+        .help("Path strings")
         //.value_parser(value_parser!(TypedPathBuf))
         .value_parser(ValueParser::os_string())
 }
@@ -109,7 +106,7 @@ pub fn get_command() -> Command {
     Command::new("get")
         .about("Read a path component [default]")
         .arg_required_else_help(true)
-        .args([normalize_arg(), component_arg(), path_arg()])
+        .args([normalize_arg(), component_arg(), paths_arg()])
         .after_help(components_help_section())
 }
 
@@ -118,7 +115,7 @@ pub fn has_command() -> Command {
         .about("Check if a path component exists")
         .arg_required_else_help(true)
         .args(true_false_args())
-        .args([component_arg(), path_arg()])
+        .args([component_arg(), paths_arg()])
         .after_help(components_help_section())
 }
 
@@ -126,7 +123,7 @@ fn remove_command() -> Command {
     Command::new("delete")
         .about("Remove a path component")
         .arg_required_else_help(true)
-        .args([component_arg(), path_arg()])
+        .args([component_arg(), paths_arg()])
         .after_help(components_help_section())
 }
 
@@ -138,7 +135,7 @@ fn replace_command() -> Command {
         .args([Arg::new("str")
             .required(true)
             .value_parser(ValueParser::os_string())])
-        .args([component_arg(), path_arg()])
+        .args([component_arg(), paths_arg()])
         .after_help(components_help_section())
 }
 
@@ -150,7 +147,7 @@ fn set_command() -> Command {
         .args([Arg::new("str")
             .required(true)
             .value_parser(ValueParser::os_string())])
-        .args([component_arg(), path_arg()])
+        .args([component_arg(), paths_arg()])
         .after_help(components_help_section())
 }
 
@@ -177,7 +174,7 @@ fn is_command() -> Command {
         .about("Ask questions about a file path")
         .arg_required_else_help(true)
         .args(true_false_args())
-        .args([question_arg(), path_arg()])
+        .args([question_arg(), paths_arg()])
         .after_help(questions_help_section())
 }
 
@@ -185,7 +182,7 @@ fn normalize_command() -> Command {
     Command::new("normalize")
         .about("Normalize a file path")
         .arg_required_else_help(true)
-        .arg(path_arg())
+        .arg(paths_arg())
 }
 
 fn path_type_arg() -> Arg {
@@ -199,5 +196,12 @@ fn convert_command() -> Command {
     Command::new("convert")
         .about("Convert between unix and windows paths")
         .arg_required_else_help(true)
-        .args([path_type_arg(), path_arg()])
+        .args([path_type_arg(), paths_arg()])
+}
+
+fn info_command() -> Command {
+    Command::new("info")
+        .about("Print information about paths")
+        .arg_required_else_help(true)
+        .args([paths_arg()])
 }

@@ -85,6 +85,32 @@ fn main() -> ExitCode {
         if let Ok(cmd) = Command::try_from(cmd) {
             // if command is is
             match cmd {
+                Command::Info => {
+                    let paths = parse_paths(cmd_args, normalized_first, parse_as);
+
+                    for path in paths {
+                        println!("{}", path.to_string_lossy());
+                        println!(
+                            "      type: {}",
+                            match path {
+                                TypedPathBuf::Unix(_) => "unix",
+                                TypedPathBuf::Windows(_) => "windows",
+                            }
+                        );
+                        for (component, name) in [
+                            (Component::Parent, "parent"),
+                            (Component::Name, "name"),
+                            (Component::Prefix, "prefix"),
+                            (Component::Stem, "stem"),
+                            (Component::Extension, "extension"),
+                        ] {
+                            println!(
+                                "{name:>10}: {}",
+                                String::from_utf8_lossy(&component.get(&path.to_path())),
+                            );
+                        }
+                    }
+                }
                 Command::Is => {
                     let mut paths = parse_paths(cmd_args, normalized_first, parse_as);
 
