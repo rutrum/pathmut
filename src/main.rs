@@ -36,6 +36,17 @@ fn parse_paths(
         })
 }
 
+/// Equality between TypedPathBuf that don't use .components(), which
+/// does not yield . and ..
+fn not_normal_path_eq(left: &TypedPathBuf, right: &TypedPathBuf) -> bool {
+    use TypedPathBuf::*;
+    match (left, right) {
+        (Unix(left), Unix(right)) => left.as_bytes() == right.as_bytes(),
+        (Windows(left), Windows(right)) => left.as_bytes() == right.as_bytes(),
+        _ => false,
+    }
+}
+
 fn main() -> ExitCode {
     let app = build_app();
     let stdin = io::stdin();
@@ -90,6 +101,12 @@ fn main() -> ExitCode {
                         (Question::Unix, false) => paths.any(|path| path.is_unix()),
                         (Question::Windows, true) => paths.all(|path| path.is_windows()),
                         (Question::Windows, false) => paths.any(|path| path.is_windows()),
+                        (Question::Normalized, true) => {
+                            paths.all(|path| not_normal_path_eq(&path, &path.normalize()))
+                        }
+                        (Question::Normalized, false) => {
+                            paths.any(|path| not_normal_path_eq(&path, &path.normalize()))
+                        }
                     };
                     if print {
                         if answer {
@@ -322,6 +339,14 @@ mod test {
             pathmut(&["is", "unix", r"/my/path"]).success();
             pathmut(&["is", "windows", r"my/path"]).failure();
             pathmut(&["is", "unix", r"my/path"]).success();
+        }
+
+        #[test]
+        fn normalized() {
+            pathmut(&["is", "normalized", "/my/path"]).success();
+            pathmut(&["is", "normalized", "/my/./path"]).failure();
+            pathmut(&["is", "normalized", "/my/../path"]).failure();
+            pathmut(&["is", "normalized", "/my//path"]).failure();
         }
     }
 

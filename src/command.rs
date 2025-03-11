@@ -71,6 +71,7 @@ pub enum Question {
     Relative,
     Unix,
     Windows,
+    Normalized,
 }
 
 impl ValueEnum for Question {
@@ -80,6 +81,7 @@ impl ValueEnum for Question {
             Question::Relative,
             Question::Unix,
             Question::Windows,
+            Question::Normalized,
         ]
     }
 
@@ -90,6 +92,7 @@ impl ValueEnum for Question {
             Relative => "relative",
             Unix => "unix",
             Windows => "windows",
+            Normalized => "normalized",
         };
         Some(PossibleValue::new(s))
     }

@@ -1,3 +1,4 @@
+use crate::Action;
 use typed_path::{PathType, TypedPath, TypedPathBuf};
 
 // use clap::{builder::PossibleValue, ValueEnum};
@@ -62,8 +63,6 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
 //    ) -> Result<Self::Value, clap::Error> {
 //    }
 //}
-
-// TODO: rewrite the following to use [u8] instead of OsStr
 
 trait FilePrefix {
     // TODO: consider if this is the right name,
@@ -277,12 +276,4 @@ impl Component {
             _ => self.replace(path, b""),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Action<'a> {
-    Get,
-    Set(&'a [u8]),
-    Delete,
-    Replace(&'a [u8]),
 }
