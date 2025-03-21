@@ -3,7 +3,9 @@ use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
-use typed_path::{PathType, TypedPath, TypedPathBuf};
+use typed_path::{
+    PathType, TypedComponent, TypedPath, TypedPathBuf, UnixComponent, WindowsComponent,
+};
 
 use pathmut::*;
 
@@ -85,6 +87,26 @@ fn main() -> ExitCode {
         if let Ok(cmd) = Command::try_from(cmd) {
             // if command is is
             match cmd {
+                Command::Depth => {
+                    let paths = parse_paths(cmd_args, normalized_first, parse_as);
+
+                    for path in paths {
+                        println!(
+                            "{}",
+                            path.components()
+                                .filter(|c| {
+                                    if let TypedComponent::Windows(WindowsComponent::Prefix(_)) = c
+                                    {
+                                        return false;
+                                    } else {
+                                        return true;
+                                    }
+                                })
+                                .count()
+                                - 1
+                        );
+                    }
+                }
                 Command::Info => {
                     let paths = parse_paths(cmd_args, normalized_first, parse_as);
 
@@ -108,6 +130,28 @@ fn main() -> ExitCode {
                                 "{name:>10}: {}",
                                 String::from_utf8_lossy(&component.get(&path.to_path())),
                             );
+                        }
+
+                        let mut offset = 0;
+                        for c in path.components() {
+                            let s = match c {
+                                TypedComponent::Unix(comp) => match comp {
+                                    UnixComponent::RootDir => "/",
+                                    UnixComponent::Normal(slice) => &String::from_utf8_lossy(slice),
+                                    _ => todo!(),
+                                },
+                                _ => todo!(),
+                            };
+
+                            let mut padding = String::new();
+                            for _ in 0..offset {
+                                padding.push_str(" ");
+                            }
+                            println!("{padding}{s}");
+                            offset += s.len();
+                            if s != "/" {
+                                offset += 1;
+                            }
                         }
                     }
                 }
@@ -274,6 +318,34 @@ mod test {
         pathmut(&["-u", "get", "parent", "C:\\path\\to\\file.txt"])
             .success()
             .stdout("\n");
+    }
+
+    #[test]
+    fn depth() {
+        pathmut(&["depth", "/"]).success().stdout("0\n");
+        pathmut(&["depth", "/path"]).success().stdout("1\n");
+        pathmut(&["depth", "/path/to"]).success().stdout("2\n");
+        pathmut(&["depth", "/path/to/file"]).success().stdout("3\n");
+        pathmut(&["depth", "/path/to/file.md"])
+            .success()
+            .stdout("3\n");
+
+        pathmut(&["depth", "path"]).success().stdout("0\n");
+        pathmut(&["depth", "path/to"]).success().stdout("1\n");
+        pathmut(&["depth", "path/to/file"]).success().stdout("2\n");
+
+        pathmut(&["depth", "C:\\"]).success().stdout("0\n");
+        pathmut(&["depth", "C:\\path"]).success().stdout("1\n");
+        pathmut(&["depth", "C:\\path\\to"]).success().stdout("2\n");
+        pathmut(&["depth", "C:\\path\\to\\file"])
+            .success()
+            .stdout("3\n");
+
+        pathmut(&["depth", "C:path"]).success().stdout("0\n");
+        pathmut(&["depth", "C:path\\to"]).success().stdout("1\n");
+        pathmut(&["depth", "C:path\\to\\file"])
+            .success()
+            .stdout("2\n");
     }
 
     mod is {

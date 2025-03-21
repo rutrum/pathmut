@@ -66,6 +66,7 @@ I should be able to work with multiple paths:
 * Normalize flag `-n` that can apply normalization to the paths before any command
 * Flags to force parsing paths as windows `-w` or as unix `-u` paths
 * Add `is normal` command which checks if a path string is normalized
+* Add `depth` command which counts the number of components before the last
 
 ### 0.6.0
 

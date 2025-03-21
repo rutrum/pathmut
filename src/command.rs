@@ -13,6 +13,7 @@ pub enum Command {
     Normalize,
     Convert,
     Info,
+    Depth,
 }
 
 impl TryFrom<&str> for Command {
@@ -30,6 +31,7 @@ impl TryFrom<&str> for Command {
             "normalize" => Normalize,
             "convert" => Convert,
             "info" => Info,
+            "depth" => Depth,
             _ => Err(())?,
         };
         Ok(command)
@@ -49,6 +51,7 @@ impl ValueEnum for Command {
             Command::Normalize,
             Command::Convert,
             Command::Info,
+            Command::Depth,
         ]
     }
 
@@ -64,6 +67,7 @@ impl ValueEnum for Command {
             Normalize => "normalize",
             Convert => "convert",
             Info => "info",
+            Depth => "depth",
         };
         Some(PossibleValue::new(s))
     }

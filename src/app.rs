@@ -20,6 +20,7 @@ pub fn build() -> Command {
             normalize_command(),
             convert_command(),
             info_command(),
+            depth_command(),
         ])
         .dont_delimit_trailing_values(true)
         .arg_required_else_help(true)
@@ -202,6 +203,13 @@ fn convert_command() -> Command {
 fn info_command() -> Command {
     Command::new("info")
         .about("Print information about paths")
+        .arg_required_else_help(true)
+        .args([paths_arg()])
+}
+
+fn depth_command() -> Command {
+    Command::new("depth")
+        .about("Number of components before the last component.")
         .arg_required_else_help(true)
         .args([paths_arg()])
 }
