@@ -227,9 +227,15 @@ impl Component {
                         original.as_path()
                     };
 
+                    if value.len() == 0 {
+                        return original
+                            .as_path::<WindowsEncoding>()
+                            .to_path_buf()
+                            .into_vec();
+                    }
+
                     // TEST: what happens if disk is more one char?
                     // what if 0 chars
-                    iter::once(WindowsPrefix::Disk(value[0]));
 
                     // this is so garbage
                     let disk_str = format!(r"{}:", String::from_utf8(vec![value[0]]).unwrap());
@@ -292,6 +298,7 @@ impl Component {
     }
 
     pub fn replace(self, path: &TypedPath, value: &[u8]) -> Vec<u8> {
+        //println!("{:?} {:?}", path, value);
         if self.has(path) {
             self.set(path, value)
         } else {

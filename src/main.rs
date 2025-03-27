@@ -952,10 +952,10 @@ mod test {
                 .stdout("/path/to/file.txt\n");
             pathmut(&["replace", "C", "disk", "C:\\path\\to\\file.txt"])
                 .success()
-                .stdout("\\path\\to\\file.txt\n");
+                .stdout("C:\\path\\to\\file.txt\n");
             pathmut(&["replace", "d", "disk", "C:\\path\\to\\file.txt"])
                 .success()
-                .stdout("\\path\\to\\file.txt\n");
+                .stdout("d:\\path\\to\\file.txt\n");
             pathmut(&["replace", "C", "disk", "\\path\\to\\file.txt"])
                 .success()
                 .stdout("\\path\\to\\file.txt\n");
