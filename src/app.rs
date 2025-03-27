@@ -8,7 +8,7 @@ use crate::component::arg_into_component;
 pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
-        .about("Mutates path strings")
+        .about("Mutate path strings")
         .args([normalize_arg(), parse_as_unix_arg(), parse_as_win_arg()])
         .subcommands([
             get_command(),
@@ -19,7 +19,7 @@ pub fn build() -> Command {
             is_command(),
             normalize_command(),
             convert_command(),
-            info_command(),
+            //info_command(),
             depth_command(),
         ])
         .dont_delimit_trailing_values(true)

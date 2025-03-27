@@ -6,22 +6,28 @@ Important to know this utility only works with path _strings_ and doesn't touch 
 
 ```
 $ pathmut
-Mutates path strings
+Mutate path strings
 
-Usage: pathmut [COMMAND or COMPONENT]
+Usage: pathmut [OPTIONS] [COMMAND or COMPONENT]
 
 Commands:
-  get      Read a path component [default]
-  delete   Remove a path component
-  replace  Replace an existing path component
-  set      Set a path component
-  has      Check if a path component exists
-  is       Ask questions about a file path
-  help     Print this message or the help of the given subcommand(s)
+  get        Read a path component [default]
+  delete     Remove a path component
+  replace    Replace an existing path component
+  set        Set a path component
+  has        Check if a path component exists
+  is         Ask questions about a file path
+  normalize  Normalize a file path
+  convert    Convert between unix and windows paths
+  depth      Number of components before the last component.
+  help       Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help     Print help information
-  -V, --version  Print version information
+  -n, --normalize   Normalize the path first
+  -u, --as-unix     Parse paths as unix paths
+  -w, --as-windows  Parse paths as windows paths
+  -h, --help        Print help information
+  -V, --version     Print version information
 
 Components:
   ext      File extension
@@ -29,6 +35,7 @@ Components:
   prefix   File prefix
   name     File name
   parent   Parent of the file or directory
+  disk     Disk of a windows path
   n        Ordinal of the nth component
 ```
 
@@ -59,6 +66,8 @@ I should be able to work with multiple paths:
 * Is path B contained with path A?
 * Join path A and path B together.
 
+Why stop at paths?  A command line utility built to mutate URIs like "scheme://user:pass@sub.domain.com/route?query=param#anchor" would have an almost identical API, and would even overlap with some path functionality.  In the future, this library will expand to include URIs as well.
+
 ## Changelog
 
 ### 0.7.0
@@ -67,6 +76,7 @@ I should be able to work with multiple paths:
 * Flags to force parsing paths as windows `-w` or as unix `-u` paths
 * Add `is normal` command which checks if a path string is normalized
 * Add `depth` command which counts the number of components before the last
+* Add `disk` component for Windows paths with disk prefix
 
 ### 0.6.0
 

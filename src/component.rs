@@ -1,8 +1,7 @@
 use crate::Action;
-use std::iter;
 use typed_path::{
-    Components, Path, PathType, TypedPath, TypedPathBuf, WindowsComponent, WindowsComponents,
-    WindowsEncoding, WindowsPath, WindowsPrefix, WindowsPrefixComponent,
+    PathType, TypedPath, TypedPathBuf, WindowsComponent, WindowsEncoding, WindowsPath,
+    WindowsPrefix,
 };
 
 // use clap::{builder::PossibleValue, ValueEnum};
@@ -14,10 +13,16 @@ pub enum Component {
     Prefix,
     Name,
     Parent,
-    // windows stuff
-    // https://doc.rust-lang.org/stable/std/path/enum.Prefix.html
     Disk,
     Nth(isize),
+    // more windows prefixes exist
+    // https://docs.rs/typed-path/0.10.0/typed_path/enum.WindowsPrefix.html#variant.Disk
+    // URIs later
+    // scheme, route, anchor, query params, domain, server
+    // Example lib: https://docs.rs/http/latest/http/uri/struct.Uri.html
+    // authority doesn't segment between user:pass
+    // Also url crate: https://docs.rs/url/latest/url/
+    // this crate has all the set methods I'd want
 }
 
 // may not need this because of ValueEnum
@@ -221,7 +226,6 @@ impl Component {
 
                     let no_disk: &typed_path::Path<WindowsEncoding> = if has_prefix {
                         original.next(); // remove prefix
-                                         //original.next(); // remove root
                         original.as_path()
                     } else {
                         original.as_path()
@@ -242,15 +246,6 @@ impl Component {
                     let disk_path = WindowsPath::new(&disk_str);
                     let mut new_path = disk_path.to_path_buf();
                     new_path.push(no_disk);
-
-                    //println!("{:?}", path);
-                    //println!("{:?}", path.to_string_lossy());
-                    //println!("no disk: {:?}", no_disk);
-                    //println!("{:?}", no_disk.to_string());
-                    //println!("just disk: {:?}", disk_path);
-                    //println!("{:?}", disk_path.to_string());
-                    //println!("{:?}", new_path);
-                    //println!("{:?}", new_path.to_string());
 
                     new_path.into()
                 }

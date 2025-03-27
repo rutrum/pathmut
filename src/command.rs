@@ -50,7 +50,7 @@ impl ValueEnum for Command {
             Command::Is,
             Command::Normalize,
             Command::Convert,
-            Command::Info,
+            //Command::Info,
             Command::Depth,
         ]
     }
