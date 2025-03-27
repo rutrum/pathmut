@@ -65,6 +65,7 @@ fn components_help_section() -> &'static str {
     \x20 \x1B[1mprefix\x1B[0m   File prefix\n\
     \x20 \x1B[1mname\x1B[0m     File name\n\
     \x20 \x1B[1mparent\x1B[0m   Parent of the file or directory\n\
+    \x20 \x1B[1mdisk\x1B[0m     Disk of a windows path
     \x20 \x1B[1;3mn\x1B[0m        Ordinal of the nth component\n"
 }
 

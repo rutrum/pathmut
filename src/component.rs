@@ -1,5 +1,9 @@
 use crate::Action;
-use typed_path::{PathType, TypedPath, TypedPathBuf};
+use std::iter;
+use typed_path::{
+    Components, Path, PathType, TypedPath, TypedPathBuf, WindowsComponent, WindowsComponents,
+    WindowsEncoding, WindowsPath, WindowsPrefix, WindowsPrefixComponent,
+};
 
 // use clap::{builder::PossibleValue, ValueEnum};
 
@@ -10,8 +14,9 @@ pub enum Component {
     Prefix,
     Name,
     Parent,
-    // Root
-    // The windows prefix
+    // windows stuff
+    // https://doc.rust-lang.org/stable/std/path/enum.Prefix.html
+    Disk,
     Nth(isize),
 }
 
@@ -27,6 +32,7 @@ impl TryFrom<&str> for Component {
             "prefix" => Prefix,
             "name" => Name,
             "parent" => Parent,
+            "disk" => Disk,
             _ => Nth(s.parse::<isize>().map_err(|_| ())?),
         };
         Ok(comp)
@@ -44,6 +50,7 @@ pub fn arg_into_component(s: &str) -> Result<Component, String> {
             "prefix" => Prefix,
             "name" => Name,
             "parent" => Parent,
+            "disk" => Disk,
             _ => Err("invalid component")?,
         };
         Ok(component)
@@ -119,6 +126,16 @@ impl Component {
                 .parent()
                 .map(|p| p.as_bytes().to_vec())
                 .unwrap_or_default(),
+            Disk => match path {
+                TypedPath::Unix(_) => "".into(),
+                TypedPath::Windows(w) => match w.components().next() {
+                    Some(WindowsComponent::Prefix(prefix)) => match prefix.kind() {
+                        WindowsPrefix::Disk(disk) => [disk].into(),
+                        _ => "".into(),
+                    },
+                    _ => "".into(),
+                },
+            },
             Nth(n) => {
                 let num_components: usize = path.components().count();
                 let index: usize = if n >= 0 {
@@ -189,6 +206,49 @@ impl Component {
                     .join(path.file_name().unwrap_or_default())
                     .into_vec()
             }
+            Disk => match path {
+                TypedPath::Unix(_) => path.to_path_buf().into_vec(),
+                TypedPath::Windows(w) => {
+                    let mut original = w.components();
+                    let mut new = original.clone();
+                    let has_prefix = match new.next() {
+                        Some(WindowsComponent::Prefix(prefix)) => match prefix.kind() {
+                            WindowsPrefix::Disk(_) => true,
+                            _ => false,
+                        },
+                        _ => false,
+                    };
+
+                    let no_disk: &typed_path::Path<WindowsEncoding> = if has_prefix {
+                        original.next(); // remove prefix
+                                         //original.next(); // remove root
+                        original.as_path()
+                    } else {
+                        original.as_path()
+                    };
+
+                    // TEST: what happens if disk is more one char?
+                    // what if 0 chars
+                    iter::once(WindowsPrefix::Disk(value[0]));
+
+                    // this is so garbage
+                    let disk_str = format!(r"{}:", String::from_utf8(vec![value[0]]).unwrap());
+                    let disk_path = WindowsPath::new(&disk_str);
+                    let mut new_path = disk_path.to_path_buf();
+                    new_path.push(no_disk);
+
+                    //println!("{:?}", path);
+                    //println!("{:?}", path.to_string_lossy());
+                    //println!("no disk: {:?}", no_disk);
+                    //println!("{:?}", no_disk.to_string());
+                    //println!("just disk: {:?}", disk_path);
+                    //println!("{:?}", disk_path.to_string());
+                    //println!("{:?}", new_path);
+                    //println!("{:?}", new_path.to_string());
+
+                    new_path.into()
+                }
+            },
             Nth(n) => {
                 // what if path is root?
                 // todo

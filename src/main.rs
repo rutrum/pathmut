@@ -322,6 +322,7 @@ mod test {
 
     #[test]
     fn depth() {
+        // linux absolute
         pathmut(&["depth", "/"]).success().stdout("0\n");
         pathmut(&["depth", "/path"]).success().stdout("1\n");
         pathmut(&["depth", "/path/to"]).success().stdout("2\n");
@@ -330,10 +331,12 @@ mod test {
             .success()
             .stdout("3\n");
 
+        // linux relative
         pathmut(&["depth", "path"]).success().stdout("0\n");
         pathmut(&["depth", "path/to"]).success().stdout("1\n");
         pathmut(&["depth", "path/to/file"]).success().stdout("2\n");
 
+        // windows absolute
         pathmut(&["depth", "C:\\"]).success().stdout("0\n");
         pathmut(&["depth", "C:\\path"]).success().stdout("1\n");
         pathmut(&["depth", "C:\\path\\to"]).success().stdout("2\n");
@@ -341,6 +344,7 @@ mod test {
             .success()
             .stdout("3\n");
 
+        // windows relative
         pathmut(&["depth", "C:path"]).success().stdout("0\n");
         pathmut(&["depth", "C:path\\to"]).success().stdout("1\n");
         pathmut(&["depth", "C:path\\to\\file"])
@@ -501,6 +505,20 @@ mod test {
         }
 
         #[test]
+        fn disk() {
+            pathmut(&["disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("C\n");
+            pathmut(&["disk", "\\path\\to\\file.txt"])
+                .success()
+                .stdout("\n");
+            pathmut(&["disk", "d:\\path\\to\\file.txt"])
+                .success()
+                .stdout("D\n"); // FIXME: this performs capitalization on my behalf, which isn't what I want
+            pathmut(&["disk", "/linux/path"]).success().stdout("\n");
+        }
+
+        #[test]
         fn nth_n1() {
             // can't use hyphens in subcommands
             pathmut(&["-1", "/"]).failure();
@@ -564,6 +582,14 @@ mod test {
             pathmut(&["has", "parent", "/my/path/dir"]).success();
             pathmut(&["has", "parent", "/my"]).success();
             pathmut(&["has", "parent", "/"]).failure();
+        }
+
+        #[test]
+        fn disk() {
+            pathmut(&["has", "disk", "/path/to/file.txt"]).failure();
+            pathmut(&["has", "disk", "C:\\path\\to\\file.txt"]).success();
+            pathmut(&["has", "disk", "d:\\path\\to\\file.txt"]).success();
+            pathmut(&["has", "disk", "\\path\\to\\file.txt"]).failure();
         }
 
         #[test]
@@ -658,6 +684,22 @@ mod test {
                 .success()
                 .stdout("/my/path\n");
             pathmut(&["get", "parent", "/"]).success().stdout("\n");
+        }
+
+        #[test]
+        fn disk() {
+            pathmut(&["get", "disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("C\n");
+            pathmut(&["get", "disk", "\\path\\to\\file.txt"])
+                .success()
+                .stdout("\n");
+            pathmut(&["get", "disk", "d:\\path\\to\\file.txt"])
+                .success()
+                .stdout("D\n"); // FIXME: this performs capitalization on my behalf, which isn't what I want
+            pathmut(&["get", "disk", "/linux/path"])
+                .success()
+                .stdout("\n");
         }
 
         #[test]
@@ -795,6 +837,22 @@ mod test {
         }
 
         #[test]
+        fn disk() {
+            pathmut(&["delete", "disk", "/path/to/file.txt"])
+                .success()
+                .stdout("/path/to/file.txt\n");
+            pathmut(&["delete", "disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("\\path\\to\\file.txt\n");
+            pathmut(&["delete", "disk", "d:\\path\\to\\file.txt"])
+                .success()
+                .stdout("\\path\\to\\file.txt\n");
+            pathmut(&["delete", "disk", "\\path\\to\\file.txt"])
+                .success()
+                .stdout("\\path\\to\\file.txt\n");
+        }
+
+        #[test]
         fn nth_n1() {
             pathmut(&["delete", "-1", "/my/path/file.txt"])
                 .success()
@@ -885,6 +943,22 @@ mod test {
             pathmut(&["replace", "new", "parent", "/my/path"])
                 .success()
                 .stdout("new/path\n");
+        }
+
+        #[test]
+        fn disk() {
+            pathmut(&["replace", "C", "disk", "/path/to/file.txt"])
+                .success()
+                .stdout("/path/to/file.txt\n");
+            pathmut(&["replace", "C", "disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("\\path\\to\\file.txt\n");
+            pathmut(&["replace", "d", "disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("\\path\\to\\file.txt\n");
+            pathmut(&["replace", "C", "disk", "\\path\\to\\file.txt"])
+                .success()
+                .stdout("\\path\\to\\file.txt\n");
         }
 
         #[test]
@@ -989,6 +1063,22 @@ mod test {
             pathmut(&["set", "new", "parent", "file.txt"])
                 .success()
                 .stdout("new/file.txt\n");
+        }
+
+        #[test]
+        fn disk() {
+            pathmut(&["set", "C", "disk", "/path/to/file.txt"])
+                .success()
+                .stdout("/path/to/file.txt\n");
+            pathmut(&["set", "C", "disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("C:\\path\\to\\file.txt\n");
+            pathmut(&["set", "d", "disk", "C:\\path\\to\\file.txt"])
+                .success()
+                .stdout("d:\\path\\to\\file.txt\n");
+            pathmut(&["set", "C", "disk", "\\path\\to\\file.txt"])
+                .success()
+                .stdout("C:\\path\\to\\file.txt\n");
         }
 
         #[test]
