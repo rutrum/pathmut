@@ -3,24 +3,10 @@
 // without losing any information
 
 use typed_path::{
-    Component, PathType, TypedComponent, UnixComponent, UnixPath, Utf8TypedComponent,
     Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefixComponent,
-    WindowsComponent, WindowsPrefix, WindowsPrefixComponent,
 };
 
-use url::{ParseError, Url};
-
-// note that Url only stores locations into the string
-// Url also works entirely with str.  Maybe I want to use utf8 with typed path?
-//pub struct Path<'a> {
-//    scheme: Option<String>,
-//    prefix: Option<Utf8WindowsPrefixComponent<'a>>,
-//    /// contains root?
-//    root: bool,
-//    /// path segments
-//    segments: Vec<String>,
-//    is_windows: bool,
-//}
+use url::{Host, ParseError, Url};
 
 #[derive(Debug, Clone)]
 pub struct Path<'s> {
@@ -79,7 +65,10 @@ impl Path<'_> {
                     password: url.password().map(|s| s.to_owned()),
                     host: url
                         .host()
-                        .map(|h| vec![h.to_string()])
+                        .map(|h| match h {
+                            Host::Domain(d) => d.split(".").map(|s| s.to_string()).collect(),
+                            _ => Vec::new(),
+                        })
                         .unwrap_or(Vec::new()),
                     query_params: url.query_pairs().map(|(a, b)| format!("{a}={b}")).collect(),
                     fragment: url.fragment().map(|s| s.to_owned()),
@@ -190,6 +179,89 @@ impl Path<'_> {
     }
 }
 
+pub enum Component {
+    // Segment
+    Extension,
+    Stem,
+    Name,
+    FilePrefix,
+
+    // Windows
+    Disk,
+    Prefix,
+
+    // URL
+    Scheme,
+    Username,
+    Password,
+    Authority,
+    Host,
+    Tld,
+    Path,
+    Queries,
+    Fragment,
+}
+
+impl Path<'_> {
+    pub fn get(&self, c: Component) -> String {
+        use Component::*;
+        use PathKind::*;
+        match (c, &self.kind) {
+            (
+                Scheme,
+                Url {
+                    scheme: Some(s), ..
+                },
+            ) => s.to_string(),
+            (
+                Username,
+                Url {
+                    username: Some(s), ..
+                },
+            ) => s.to_string(),
+            (
+                Password,
+                Url {
+                    password: Some(s), ..
+                },
+            ) => s.to_string(),
+            (Host, Url { host, .. }) => host.join("."),
+            (Tld, Url { host, .. }) => match host.len() {
+                0 | 1 => "".into(),
+                _ => host[host.len() - 1].clone(),
+            },
+            (
+                Queries,
+                Url {
+                    query_params: qps, ..
+                },
+            ) if qps.len() > 0 => format!("?{}", qps.join("&")),
+            (
+                Fragment,
+                Url {
+                    fragment: Some(s), ..
+                },
+            ) => s.to_string(),
+            (Extension, _) if self.segments.len() > 0 => {
+                let parts: Vec<&str> = self.segments.last().unwrap().split(".").collect();
+                match parts.len() {
+                    0 | 1 => "".into(),
+                    _ => parts.last().unwrap().to_string(),
+                }
+            }
+            (Stem, _) if self.segments.len() > 0 => {
+                let parts: Vec<&str> = self.segments.last().unwrap().split(".").collect();
+                match parts.len() {
+                    0 | 1 => "".into(),
+                    _ => parts[..parts.len() - 1].join("."),
+                }
+            }
+            (Name, _) if self.segments.len() > 0 => self.segments.last().unwrap().clone(),
+            _ => "".into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -262,24 +334,100 @@ mod test {
     #[case("http://example.com/path/file.csv?a=5")]
     #[case("http://example.com/path/file.csv?a=5&b=2")]
     #[case("http://example.com/path/file.csv?a=5&b=2#f=3")]
+    #[case("/path/file.csv#a=5")]
+    #[case("/path/file.csv?a=5")]
+    #[case("/path/file.csv?a=5&b=2")]
+    #[case("/path/file.csv?a=5&b=2#f=3")]
     fn identity(#[case] path: &str) {
         let p = Path::parse(path);
         assert_eq!(path.to_string(), p.clone().serialize(), "{:?}", p);
     }
-}
 
-/// Parts of a file, dot separated
-/// This might not be a helpful abstraction
-/// I guess the reason that all these libs dont just store this stuff
-/// is so they dont have to do all this computation up front
-pub struct File<'a> {
-    parts: Vec<&'a [u8]>,
-}
+    #[rstest]
+    // unix
+    #[case("file.stem.ext")]
+    #[case("dir/file.stem.ext")]
+    #[case("/file.stem.ext")]
+    #[case("/dir/file.stem.ext")]
+    #[case("file.ext")]
+    #[case("dir/file.ext")]
+    #[case("/file.ext")]
+    #[case("/dir/file.ext")]
+    // windows
+    // #[case(r"dir\file.stem.ext")]  // parsed as unix
+    #[case(r"\file.stem.ext")]
+    #[case(r"\dir\file.stem.ext")]
+    // #[case(r"dir\file.ext")] // parsed as unix
+    #[case(r"\file.ext")]
+    #[case(r"\dir\file.ext")]
+    // these get parsed as unix paths, shouldn't they be urls?  I can check for . in top folder and not root
+    //#[case("sub.domain.tld")]
+    //#[case("sub.domain.tld/file.ext")]
+    //#[case("sub.domain.tld/dir/file.ext")]
+    // no suffix
+    #[case("scheme://sub.domain.tld/dir/file.ext")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext")]
+    // fragment
+    #[case("scheme://sub.domain.tld/dir/file.ext#fragment")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext#fragment")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext#fragment")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext#fragment")]
+    // query
+    #[case("scheme://sub.domain.tld/dir/file.ext?key=value")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value")]
+    // fragment and query
+    #[case("scheme://sub.domain.tld/dir/file.ext?key=value#fragment")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    fn can_get(#[case] path: &str) {
+        let p = Path::parse(path);
+        // segments
+        if path.contains("ext") {
+            assert_eq!(p.get(Component::Extension), "ext", "{:?}", p);
+        }
+        if path.contains("stem") {
+            assert_eq!(p.get(Component::Stem), "file.stem", "{:?}", p);
+        }
+        if path.contains("file") {
+            if path.contains("stem") {
+                assert_eq!(p.get(Component::Name), "file.stem.ext", "{:?}", p);
+            } else {
+                assert_eq!(p.get(Component::Name), "file.ext", "{:?}", p);
+            }
+        }
 
-impl File<'_> {
-    pub fn parse(path: &str) -> File {
-        // will need to be more robust
-        let parts = path.split(".").into_iter().map(|s| s.as_bytes()).collect();
-        File { parts }
+        // url
+        if path.contains("scheme") {
+            assert_eq!(p.get(Component::Scheme), "scheme");
+        }
+        if path.contains("user") {
+            assert_eq!(p.get(Component::Username), "user");
+        }
+        if path.contains("pass") {
+            assert_eq!(p.get(Component::Password), "pass");
+        }
+        if path.contains("domain") {
+            assert!(p.get(Component::Host).contains("domain"));
+        }
+        if path.contains("tld") {
+            assert_eq!(p.get(Component::Tld), "tld", "{:?}", p);
+        }
+        if path.contains("key") {
+            assert_eq!(p.get(Component::Queries), "?key=value");
+        }
+        if path.contains("fragment") {
+            assert_eq!(p.get(Component::Fragment), "fragment");
+        }
+    }
+
+    #[test]
+    fn hueristic() {
+        // if it contains a back slash and no forward slashes, assume windows
+        // if no schema or authority, and the first segment contains dots, assume URL
     }
 }
