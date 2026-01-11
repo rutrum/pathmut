@@ -43,7 +43,7 @@ enum PathKind<'s> {
         password: Option<String>,
         host: Vec<String>,
         query_params: Vec<String>,
-        fragments: Vec<String>,
+        fragment: Option<String>,
     },
 }
 
@@ -62,22 +62,27 @@ impl Path<'_> {
         let url = Url::parse(path_str)?;
         let scheme = Some(url.scheme().to_owned());
         let segments = match url.path_segments() {
-            Some(segs) => segs.map(|s| s.to_owned()).collect(),
+            Some(segs) => segs.map(|s| s.to_owned()).filter(|x| x.len() > 0).collect(),
             Option::None => Vec::new(),
+        };
+        let username = if url.username().is_empty() {
+            None
+        } else {
+            Some(url.username().to_owned())
         };
         Ok((
             Path {
                 segments,
                 kind: PathKind::Url {
                     scheme,
-                    username: None,
-                    password: None,
+                    username,
+                    password: url.password().map(|s| s.to_owned()),
                     host: url
                         .host()
                         .map(|h| vec![h.to_string()])
                         .unwrap_or(Vec::new()),
-                    query_params: Vec::new(),
-                    fragments: Vec::new(),
+                    query_params: url.query_pairs().map(|(a, b)| format!("{a}={b}")).collect(),
+                    fragment: url.fragment().map(|s| s.to_owned()),
                 },
             },
             url.cannot_be_a_base(),
@@ -153,36 +158,35 @@ impl Path<'_> {
                 password,
                 host,
                 query_params,
-                fragments,
+                fragment,
             } => {
                 let mut ss: Vec<String> = Vec::new();
                 if let Some(s) = scheme {
                     ss.push(s);
                     ss.push("://".to_owned());
                 }
+                let userpass = match (username, password) {
+                    (Some(u), Some(p)) => format!("{u}:{p}@"),
+                    (Some(u), None) => format!("{u}@"),
+                    (None, Some(p)) => format!(":{p}@"),
+                    (None, None) => String::new(),
+                };
+                ss.push(userpass);
                 ss.push(host.join("."));
+                if self.segments.len() > 0 {
+                    ss.push("/".to_owned());
+                    ss.push(self.segments.join("/"));
+                }
+                if query_params.len() > 0 {
+                    ss.push("?".to_owned());
+                    ss.push(query_params.join("&"));
+                }
+                if let Some(f) = fragment {
+                    ss.push(format!("#{f}"));
+                }
                 ss.join("")
             }
         }
-
-        //if let Some(prefix) = self.prefix {
-        //    s.push(prefix.as_str().to_owned())
-        //}
-        //if let Some(scheme) = self.scheme {
-        //    s.push(scheme);
-        //    s.push("//".to_owned());
-        //}
-        //let separator = (if self.is_windows { r"\" } else { "/" }).to_owned();
-        //if self.root {
-        //    s.push(separator.clone());
-        //}
-        //for (i, segment) in self.segments.iter().enumerate() {
-        //    if i > 0 {
-        //        s.push(separator.clone());
-        //    }
-        //    s.push(segment.clone());
-        //}
-        //String::from_utf8(s.join("").into()).unwrap()
     }
 }
 
@@ -241,8 +245,23 @@ mod test {
     // URLS
     // domains
     #[case("github.com")]
+    #[case("rutrum.github.io")]
+    #[case("machine.left-right.ts.net")]
     // schemes
     #[case("https://github.com")]
+    #[case("smtp://gmail.com")]
+    // authority
+    #[case("ssh://user:pass@github.com")]
+    #[case("ssh://user@github.com")]
+    #[case("ssh://:pass@github.com")]
+    // paths
+    #[case("file:///path/to/file")]
+    #[case("file:///file.tar.gz")]
+    // query_params, fragments
+    #[case("http://example.com/path/file.csv#a=5")]
+    #[case("http://example.com/path/file.csv?a=5")]
+    #[case("http://example.com/path/file.csv?a=5&b=2")]
+    #[case("http://example.com/path/file.csv?a=5&b=2#f=3")]
     fn identity(#[case] path: &str) {
         let p = Path::parse(path);
         assert_eq!(path.to_string(), p.clone().serialize(), "{:?}", p);
