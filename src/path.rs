@@ -3,7 +3,8 @@
 // without losing any information
 
 use typed_path::{
-    Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefixComponent,
+    Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefix,
+    Utf8WindowsPrefixComponent,
 };
 
 use url::{Host, ParseError, Url};
@@ -208,6 +209,35 @@ impl Path<'_> {
         use PathKind::*;
         match (c, &self.kind) {
             (
+                Prefix,
+                Windows {
+                    prefix: Some(p), ..
+                },
+            ) => {
+                use Utf8WindowsPrefix::*;
+                match p.kind() {
+                    Verbatim(s) => format!(r"\\?\{s}"),
+                    VerbatimUNC(server, share) => format!(r"\\?\UNC\{server}\{share}"),
+                    VerbatimDisk(disk) => format!(r"\\?\{disk}:"),
+                    DeviceNS(s) => format!(r"\\.\{s}"),
+                    UNC(server, share) => format!(r"\\{server}\{share}"),
+                    Disk(disk) => format!("{disk}:"),
+                }
+            }
+            (
+                Disk,
+                Windows {
+                    prefix: Some(p), ..
+                },
+            ) => {
+                use Utf8WindowsPrefix::*;
+                match p.kind() {
+                    VerbatimDisk(disk) => disk.into(),
+                    Disk(disk) => disk.into(),
+                    _ => String::new(),
+                }
+            }
+            (
                 Scheme,
                 Url {
                     scheme: Some(s), ..
@@ -364,6 +394,16 @@ mod test {
     //#[case("sub.domain.tld")]
     //#[case("sub.domain.tld/file.ext")]
     //#[case("sub.domain.tld/dir/file.ext")]
+    // windows prefix
+    #[case(r"Z:\dir\file.ext")]
+    #[case(r"Z:dir\file.ext")]
+    #[case(r"\\server\share")]
+    #[case(r"\\server\share\file.ext")]
+    #[case(r"\\?\dir\file.ext")]
+    #[case(r"\\?\UNC\server\share")]
+    #[case(r"\\?\Z:dir\file.ext")]
+    // todo: DeviceNS, that's weird though, since it depends on fixed number of devices
+    // I dont really want to support that
     // no suffix
     #[case("scheme://sub.domain.tld/dir/file.ext")]
     #[case("scheme://user@sub.domain.tld/dir/file.ext")]
@@ -398,6 +438,17 @@ mod test {
                 assert_eq!(p.get(Component::Name), "file.stem.ext", "{:?}", p);
             } else {
                 assert_eq!(p.get(Component::Name), "file.ext", "{:?}", p);
+            }
+        }
+        // windows prefix
+        if path.contains("Z") {
+            assert_eq!(p.get(Component::Disk), "Z", "{:?}", p);
+        }
+        if path.contains("server") {
+            if path.contains("UNC") {
+                assert_eq!(p.get(Component::Prefix), r"\\?\UNC\server\share", "{:?}", p);
+            } else {
+                assert_eq!(p.get(Component::Prefix), r"\\server\share", "{:?}", p);
             }
         }
 
