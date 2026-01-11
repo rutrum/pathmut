@@ -19,7 +19,7 @@ pub fn build() -> Command {
             is_command(),
             normalize_command(),
             convert_command(),
-            //info_command(),
+            info_command(),
             depth_command(),
         ])
         .dont_delimit_trailing_values(true)

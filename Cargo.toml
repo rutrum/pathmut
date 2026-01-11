@@ -15,7 +15,9 @@ readme = "README.md"
 [dependencies]
 clap = { version = "^4.0", features = ["cargo", "color", "wrap_help"] }
 typed-path = "0.10.0"
+url = "2.5.8"
 
 [dev-dependencies]
 predicates = "2.1.1"
 assert_cmd = "2.0.4"
+rstest = "0.26.1"

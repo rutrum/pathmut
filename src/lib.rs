@@ -4,6 +4,7 @@
 mod app;
 mod command;
 mod component;
+pub mod path;
 
 pub use app::build as build_app;
 pub use app::get_command;
