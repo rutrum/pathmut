@@ -9,9 +9,11 @@ use typed_path::{
 
 use url::{Host, ParseError, Url};
 
+use std::borrow::Borrow;
+
 #[derive(Debug, Clone)]
 pub struct Path<'s> {
-    segments: Vec<String>,
+    segments: Vec<Segment>,
     kind: PathKind<'s>,
 }
 
@@ -34,7 +36,73 @@ enum PathKind<'s> {
     },
 }
 
+#[derive(Debug, Clone)]
+pub struct Segment(String);
+
+/// Any string that's delimited by periods
+impl Segment {
+    pub fn name(&self) -> String {
+        self.0.clone()
+    }
+
+    pub fn stem(&self) -> String {
+        if self.len() > 1 {
+            self.0
+                .split(".")
+                .take(self.len() - 1)
+                .collect::<Vec<&str>>()
+                .join(".")
+        } else {
+            String::new()
+        }
+    }
+
+    pub fn extension(&self) -> String {
+        if self.len() > 1 {
+            self.0.split(".").last().unwrap().into()
+        } else {
+            String::new()
+        }
+    }
+
+    pub fn prefix(&self) -> String {
+        self.0
+            .split(".")
+            .next()
+            .map(|s| s.into())
+            .unwrap_or(String::new())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.split(".").count()
+    }
+}
+
+impl From<Segment> for String {
+    fn from(segment: Segment) -> String {
+        segment.0
+    }
+}
+
+impl Borrow<str> for Segment {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
 impl Path<'_> {
+    pub fn is_unix(self) -> bool {
+        matches!(self.kind, PathKind::Unix { .. })
+    }
+
+    pub fn is_windows(self) -> bool {
+        matches!(self.kind, PathKind::Windows { .. })
+    }
+
+    pub fn is_url(self) -> bool {
+        matches!(self.kind, PathKind::Url { .. })
+    }
+
     pub fn parse(path_str: &str) -> Path {
         let as_url = Path::parse_as_url(path_str);
         let as_path = Path::parse_as_typed_path(path_str);
@@ -49,7 +117,11 @@ impl Path<'_> {
         let url = Url::parse(path_str)?;
         let scheme = Some(url.scheme().to_owned());
         let segments = match url.path_segments() {
-            Some(segs) => segs.map(|s| s.to_owned()).filter(|x| x.len() > 0).collect(),
+            Some(segs) => segs
+                .map(|s| s.to_owned())
+                .filter(|x| x.len() > 0)
+                .map(Segment)
+                .collect(),
             Option::None => Vec::new(),
         };
         let username = if url.username().is_empty() {
@@ -95,7 +167,7 @@ impl Path<'_> {
                         Normal(s) => segment = Some(s),
                     };
                     if let Some(s) = segment {
-                        segments.push(s.to_string())
+                        segments.push(Segment(s.to_string()))
                     }
                 }
                 Path {
@@ -117,7 +189,7 @@ impl Path<'_> {
                         Prefix(p) => prefix = Some(p),
                     };
                     if let Some(s) = segment {
-                        segments.push(s.to_string())
+                        segments.push(Segment(s.to_string()))
                     }
                 }
                 Path {
@@ -208,6 +280,7 @@ impl Path<'_> {
         use Component::*;
         use PathKind::*;
         match (c, &self.kind) {
+            // windows
             (
                 Prefix,
                 Windows {
@@ -237,6 +310,7 @@ impl Path<'_> {
                     _ => String::new(),
                 }
             }
+            // Url
             (
                 Scheme,
                 Url {
@@ -255,6 +329,17 @@ impl Path<'_> {
                     password: Some(s), ..
                 },
             ) => s.to_string(),
+            (
+                Authority,
+                Url {
+                    password, username, ..
+                },
+            ) => match (username, password) {
+                (Some(u), Some(p)) => format!("{u}:{p}"),
+                (None, Some(p)) => format!(":{p}"),
+                (Some(u), None) => format!("{u}"),
+                (None, None) => format!(""),
+            },
             (Host, Url { host, .. }) => host.join("."),
             (Tld, Url { host, .. }) => match host.len() {
                 0 | 1 => "".into(),
@@ -272,21 +357,11 @@ impl Path<'_> {
                     fragment: Some(s), ..
                 },
             ) => s.to_string(),
-            (Extension, _) if self.segments.len() > 0 => {
-                let parts: Vec<&str> = self.segments.last().unwrap().split(".").collect();
-                match parts.len() {
-                    0 | 1 => "".into(),
-                    _ => parts.last().unwrap().to_string(),
-                }
-            }
-            (Stem, _) if self.segments.len() > 0 => {
-                let parts: Vec<&str> = self.segments.last().unwrap().split(".").collect();
-                match parts.len() {
-                    0 | 1 => "".into(),
-                    _ => parts[..parts.len() - 1].join("."),
-                }
-            }
-            (Name, _) if self.segments.len() > 0 => self.segments.last().unwrap().clone(),
+            // Segments
+            (Extension, _) if self.segments.len() > 0 => self.segments.last().unwrap().extension(),
+            (Stem, _) if self.segments.len() > 0 => self.segments.last().unwrap().stem(),
+            (Name, _) if self.segments.len() > 0 => self.segments.last().unwrap().clone().0,
+            (FilePrefix, _) if self.segments.len() > 0 => self.segments.last().unwrap().prefix(),
             _ => "".into(),
         }
     }
@@ -383,6 +458,12 @@ mod test {
     #[case("dir/file.ext")]
     #[case("/file.ext")]
     #[case("/dir/file.ext")]
+    // relative paths
+    #[case(".")]
+    #[case("..")]
+    #[case("./dir/file.ext")]
+    #[case("../dir/file.ext")]
+    #[case("././../dir/../file.ext")]
     // windows
     // #[case(r"dir\file.stem.ext")]  // parsed as unix
     #[case(r"\file.stem.ext")]
@@ -439,6 +520,7 @@ mod test {
             } else {
                 assert_eq!(p.get(Component::Name), "file.ext", "{:?}", p);
             }
+            assert_eq!(p.get(Component::FilePrefix), "file", "{:?}", p);
         }
         // windows prefix
         if path.contains("Z") {
@@ -462,6 +544,12 @@ mod test {
         if path.contains("pass") {
             assert_eq!(p.get(Component::Password), "pass");
         }
+        match (path.contains("user"), path.contains("pass")) {
+            (true, true) => assert_eq!(p.get(Component::Authority), "user:pass"),
+            (true, false) => assert_eq!(p.get(Component::Authority), "user"),
+            (false, true) => assert_eq!(p.get(Component::Authority), ":pass"),
+            (false, false) => assert_eq!(p.get(Component::Authority), ""),
+        }
         if path.contains("domain") {
             assert!(p.get(Component::Host).contains("domain"));
         }
@@ -478,7 +566,14 @@ mod test {
 
     #[test]
     fn hueristic() {
+        // if it contains ://, it's a url
+        assert!(Path::parse("s://asdf").is_url());
         // if it contains a back slash and no forward slashes, assume windows
-        // if no schema or authority, and the first segment contains dots, assume URL
+        assert!(Path::parse(r"dir\dir2").is_windows());
+        // first segment contains dots, and isn't relative, assume URL
+        assert!(Path::parse(r"github.com/rutrum").is_url());
+        // if the first segment has no schema/authority and is relative, assume unix
+        assert!(Path::parse(r"../rutrum").is_unix());
+        assert!(Path::parse(r"./rutrum").is_unix());
     }
 }
