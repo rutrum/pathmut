@@ -23,7 +23,7 @@ enum PathKind<'s> {
         root: bool,
     },
     Windows {
-        prefix: Option<Utf8WindowsPrefixComponent<'s>>,
+        prefix: Option<WindowsPrefix<'s>>, // TODO: make my own prefix type
         root: bool,
     },
     Url {
@@ -37,12 +37,39 @@ enum PathKind<'s> {
 }
 
 #[derive(Debug, Clone)]
+enum WindowsPrefix<'s> {
+    Verbatim(&'s str),
+    VerbatimUNC(&'s str, &'s str),
+    VerbatimDisk(char),
+    DeviceNS(&'s str),
+    UNC(&'s str, &'s str),
+    Disk(char),
+}
+
+impl WindowsPrefix<'_> {
+    fn to_string(&self) -> String {
+        match self {
+            WindowsPrefix::Verbatim(path) => format!(r"\\?\{}", path),
+            WindowsPrefix::VerbatimUNC(server, share) => format!(r"\\?\UNC\{}\{}", server, share),
+            WindowsPrefix::VerbatimDisk(drive) => format!(r"\\?\{}:", drive),
+            WindowsPrefix::DeviceNS(name) => format!(r"\\.\{}", name),
+            WindowsPrefix::UNC(server, share) => format!(r"\\{}\{}", server, share),
+            WindowsPrefix::Disk(drive) => format!("{}:", drive),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Segment(String);
 
 /// Any string that's delimited by periods
 impl Segment {
     pub fn name(&self) -> String {
         self.0.clone()
+    }
+
+    pub fn set_name(&mut self, new_value: &str) {
+        self.0 = new_value.into();
     }
 
     pub fn stem(&self) -> String {
@@ -53,8 +80,16 @@ impl Segment {
                 .collect::<Vec<&str>>()
                 .join(".")
         } else {
-            String::new()
+            self.0.clone()
         }
+    }
+
+    pub fn set_stem(&mut self, new_value: &str) {
+        self.0 = if self.len() > 1 {
+            format!("{}.{}", new_value, self.extension())
+        } else {
+            format!("{}.{}", new_value, self.0)
+        };
     }
 
     pub fn extension(&self) -> String {
@@ -65,12 +100,34 @@ impl Segment {
         }
     }
 
+    pub fn set_extension(&mut self, new_value: &str) {
+        self.0 = if self.len() > 1 {
+            format!("{}.{}", self.stem(), new_value)
+        } else {
+            format!("{}.{}", self.0, new_value)
+        };
+    }
+
     pub fn prefix(&self) -> String {
+        // this is probably not correct, see https://doc.rust-lang.org/std/path/struct.Path.html#method.file_prefix
         self.0
             .split(".")
             .next()
             .map(|s| s.into())
             .unwrap_or(String::new())
+    }
+
+    pub fn set_prefix(&mut self, new_value: &str) {
+        self.0 = if self.len() > 1 {
+            format!(
+                "{}.{}",
+                new_value,
+                self.0.split(".").skip(1).collect::<Vec<&str>>().join(".")
+            )
+        } else {
+            // this might not be correct
+            format!("{}.{}", new_value, self.0)
+        };
     }
 
     pub fn len(&self) -> usize {
@@ -186,7 +243,20 @@ impl Path<'_> {
                         CurDir => segment = Some("."),
                         ParentDir => segment = Some(".."),
                         Normal(s) => segment = Some(s),
-                        Prefix(p) => prefix = Some(p),
+                        Prefix(p) => {
+                            prefix = Some(match p.kind() {
+                                Utf8WindowsPrefix::Verbatim(s) => WindowsPrefix::Verbatim(s),
+                                Utf8WindowsPrefix::VerbatimUNC(s, t) => {
+                                    WindowsPrefix::VerbatimUNC(s, t)
+                                }
+                                Utf8WindowsPrefix::VerbatimDisk(s) => {
+                                    WindowsPrefix::VerbatimDisk(s)
+                                }
+                                Utf8WindowsPrefix::DeviceNS(s) => WindowsPrefix::DeviceNS(s),
+                                Utf8WindowsPrefix::UNC(s, t) => WindowsPrefix::UNC(s, t),
+                                Utf8WindowsPrefix::Disk(s) => WindowsPrefix::Disk(s),
+                            })
+                        }
                     };
                     if let Some(s) = segment {
                         segments.push(Segment(s.to_string()))
@@ -200,16 +270,20 @@ impl Path<'_> {
         }
     }
 
-    pub fn serialize(self) -> String {
-        match self.kind {
+    pub fn serialize(&self) -> String {
+        match &self.kind {
             PathKind::Unix { root } => {
-                format!("{}{}", if root { "/" } else { "" }, self.segments.join("/"))
+                format!(
+                    "{}{}",
+                    if *root { "/" } else { "" },
+                    self.segments.join("/")
+                )
             }
             PathKind::Windows { root, prefix } => {
-                let left = if root { r"\" } else { "" };
+                let left = if *root { r"\" } else { "" };
                 let right = String::from_utf8(self.segments.join(r"\").into()).unwrap();
                 if let Some(p) = prefix {
-                    format!("{}{}{}", p.as_str(), left, right)
+                    format!("{}{}{}", p.to_string(), left, right)
                 } else {
                     format!("{}{}", left, right)
                 }
@@ -224,7 +298,7 @@ impl Path<'_> {
             } => {
                 let mut ss: Vec<String> = Vec::new();
                 if let Some(s) = scheme {
-                    ss.push(s);
+                    ss.push(s.clone());
                     ss.push("://".to_owned());
                 }
                 let userpass = match (username, password) {
@@ -252,6 +326,7 @@ impl Path<'_> {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Component {
     // Segment
     Extension,
@@ -286,27 +361,17 @@ impl Path<'_> {
                 Windows {
                     prefix: Some(p), ..
                 },
-            ) => {
-                use Utf8WindowsPrefix::*;
-                match p.kind() {
-                    Verbatim(s) => format!(r"\\?\{s}"),
-                    VerbatimUNC(server, share) => format!(r"\\?\UNC\{server}\{share}"),
-                    VerbatimDisk(disk) => format!(r"\\?\{disk}:"),
-                    DeviceNS(s) => format!(r"\\.\{s}"),
-                    UNC(server, share) => format!(r"\\{server}\{share}"),
-                    Disk(disk) => format!("{disk}:"),
-                }
-            }
+            ) => p.to_string(),
             (
                 Disk,
                 Windows {
                     prefix: Some(p), ..
                 },
             ) => {
-                use Utf8WindowsPrefix::*;
-                match p.kind() {
-                    VerbatimDisk(disk) => disk.into(),
-                    Disk(disk) => disk.into(),
+                use WindowsPrefix::*;
+                match p {
+                    VerbatimDisk(disk) => (*disk).into(),
+                    Disk(disk) => (*disk).into(),
                     _ => String::new(),
                 }
             }
@@ -363,6 +428,65 @@ impl Path<'_> {
             (Name, _) if self.segments.len() > 0 => self.segments.last().unwrap().clone().0,
             (FilePrefix, _) if self.segments.len() > 0 => self.segments.last().unwrap().prefix(),
             _ => "".into(),
+        }
+    }
+
+    pub fn has(&self, c: Component) -> bool {
+        !self.get(c).is_empty()
+    }
+
+    pub fn set(&mut self, c: Component, new_value: &str) {
+        use Component::*;
+        use PathKind::*;
+        match (c, &self.kind) {
+            // Windows
+            (
+                Prefix,
+                Windows {
+                    prefix: Some(p), ..
+                },
+            ) => {
+                // somehow parse new_value as a prefix
+            }
+            (
+                Disk,
+                Windows {
+                    prefix: Some(p),
+                    root,
+                },
+            ) => {
+                self.kind = Windows {
+                    // redo this too
+                    // should disk be restricted to a character?
+                    prefix: Some(WindowsPrefix::Disk(new_value.chars().next().unwrap())),
+                    root: *root,
+                };
+            }
+            (Extension, _) => {
+                if self.segments.len() > 0 {
+                    self.segments.last_mut().unwrap().set_extension(new_value);
+                }
+            }
+            (Stem, _) => {
+                if self.segments.len() > 0 {
+                    self.segments.last_mut().unwrap().set_stem(new_value);
+                }
+            }
+            (Name, _) if self.segments.len() > 0 => {
+                self.segments.last_mut().unwrap().set_name(new_value);
+            }
+            (FilePrefix, _) => {
+                if self.segments.len() > 0 {
+                    self.segments.last_mut().unwrap().set_stem(new_value);
+                }
+            }
+            _ => todo!(),
+        }
+    }
+
+    pub fn replace(&mut self, c: Component, new_value: &str) {
+        if !self.get(c).is_empty() {
+            self.set(c, new_value);
         }
     }
 }
@@ -564,6 +688,42 @@ mod test {
         }
     }
 
+    #[rstest]
+    fn can_set_extension(
+        #[values("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value#fragment")] path: &str,
+    ) {
+        let q = Path::parse(path);
+        let new_value = "APPLE";
+
+        if path.contains("ext") {
+            let mut p = q.clone();
+            p.set(Component::Extension, new_value);
+            assert_eq!(p.get(Component::Extension), new_value, "{:?}", p);
+            let new_path = p.clone().serialize();
+            assert!(!new_path.contains("ext"), "{}", new_path);
+        }
+        if path.contains("file") {
+            let mut p = q.clone();
+            p.set(Component::FilePrefix, new_value);
+            assert_eq!(p.get(Component::FilePrefix), new_value, "{:?}", p);
+            let new_path = p.clone().serialize();
+            assert!(!new_path.contains("file"), "{}", new_path);
+
+            let mut p = q.clone();
+            p.set(Component::Stem, new_value);
+            assert_eq!(p.get(Component::Stem), new_value, "{:?}", p);
+            let new_path = p.clone().serialize();
+            assert!(!new_path.contains("file"), "{}", new_path);
+
+            let mut p = q.clone();
+            p.set(Component::Name, new_value);
+            assert_eq!(p.get(Component::Name), new_value, "{:?}", p);
+            let new_path = p.clone().serialize();
+            assert!(!new_path.contains("file"), "{}", new_path);
+        }
+    }
+
+    #[ignore]
     #[test]
     fn hueristic() {
         // if it contains ://, it's a url
