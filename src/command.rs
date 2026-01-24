@@ -112,11 +112,11 @@ pub enum PathKind {
     Windows,
 }
 
-impl Into<PathType> for PathKind {
-    fn into(self) -> PathType {
-        match self {
-            Self::Unix => PathType::Unix,
-            Self::Windows => PathType::Windows,
+impl From<PathKind> for PathType {
+    fn from(val: PathKind) -> Self {
+        match val {
+            PathKind::Unix => PathType::Unix,
+            PathKind::Windows => PathType::Windows,
         }
     }
 }

@@ -217,10 +217,7 @@ impl Component {
                     let mut original = w.components();
                     let mut new = original.clone();
                     let has_prefix = match new.next() {
-                        Some(WindowsComponent::Prefix(prefix)) => match prefix.kind() {
-                            WindowsPrefix::Disk(_) => true,
-                            _ => false,
-                        },
+                        Some(WindowsComponent::Prefix(prefix)) => matches!(prefix.kind(), WindowsPrefix::Disk(_)),
                         _ => false,
                     };
 
@@ -231,7 +228,7 @@ impl Component {
                         original.as_path()
                     };
 
-                    if value.len() == 0 {
+                    if value.is_empty() {
                         return original
                             .as_path::<WindowsEncoding>()
                             .to_path_buf()

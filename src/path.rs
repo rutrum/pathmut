@@ -47,19 +47,19 @@ enum WindowsPrefix {
     VerbatimUNC(String, String),
     VerbatimDisk(char),
     DeviceNS(String),
-    UNC(String, String),
+    Unc(String, String),
     Disk(char),
 }
 
-impl WindowsPrefix {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for WindowsPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WindowsPrefix::Verbatim(path) => format!(r"\\?\{}", path),
-            WindowsPrefix::VerbatimUNC(server, share) => format!(r"\\?\UNC\{}\{}", server, share),
-            WindowsPrefix::VerbatimDisk(drive) => format!(r"\\?\{}:", drive),
-            WindowsPrefix::DeviceNS(name) => format!(r"\\.\{}", name),
-            WindowsPrefix::UNC(server, share) => format!(r"\\{}\{}", server, share),
-            WindowsPrefix::Disk(drive) => format!("{}:", drive),
+            WindowsPrefix::Verbatim(path) => write!(f, r"\\?\{}", path),
+            WindowsPrefix::VerbatimUNC(server, share) => write!(f, r"\\?\UNC\{}\{}", server, share),
+            WindowsPrefix::VerbatimDisk(drive) => write!(f, r"\\?\{}:", drive),
+            WindowsPrefix::DeviceNS(name) => write!(f, r"\\.\{}", name),
+            WindowsPrefix::Unc(server, share) => write!(f, r"\\{}\{}", server, share),
+            WindowsPrefix::Disk(drive) => write!(f, "{}:", drive),
         }
     }
 }
@@ -119,7 +119,7 @@ impl Segment {
             .split(".")
             .next()
             .map(|s| s.into())
-            .unwrap_or(String::new())
+            .unwrap_or_default()
     }
 
     pub fn set_prefix(&mut self, new_value: &str) {
@@ -137,6 +137,10 @@ impl Segment {
 
     pub fn len(&self) -> usize {
         self.0.split(".").count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -162,7 +166,7 @@ fn convert_prefix_to_owned(prefix: Utf8WindowsPrefix) -> WindowsPrefix {
         Utf8WindowsPrefix::VerbatimDisk(disk) => WindowsPrefix::VerbatimDisk(disk),
         Utf8WindowsPrefix::DeviceNS(name) => WindowsPrefix::DeviceNS(name.to_string()),
         Utf8WindowsPrefix::UNC(server, share) => {
-            WindowsPrefix::UNC(server.to_string(), share.to_string())
+            WindowsPrefix::Unc(server.to_string(), share.to_string())
         }
         Utf8WindowsPrefix::Disk(disk) => WindowsPrefix::Disk(disk),
     }
@@ -197,7 +201,7 @@ impl Path {
         let segments = match url.path_segments() {
             Some(segs) => segs
                 .map(|s| s.to_owned())
-                .filter(|x| x.len() > 0)
+                .filter(|x| !x.is_empty())
                 .map(Segment)
                 .collect(),
             Option::None => Vec::new(),
@@ -287,7 +291,7 @@ impl Path {
                                     WindowsPrefix::DeviceNS(s.to_string())
                                 }
                                 Utf8WindowsPrefix::UNC(s, t) => {
-                                    WindowsPrefix::UNC(s.to_string(), t.to_string())
+                                    WindowsPrefix::Unc(s.to_string(), t.to_string())
                                 }
                                 Utf8WindowsPrefix::Disk(s) => WindowsPrefix::Disk(s),
                             })
@@ -318,7 +322,7 @@ impl Path {
                 let left = if *root { r"\" } else { "" };
                 let right = String::from_utf8(self.segments.join(r"\").into()).unwrap();
                 if let Some(p) = prefix {
-                    format!("{}{}{}", p.to_string(), left, right)
+                    format!("{}{}{}", p, left, right)
                 } else {
                     format!("{}{}", left, right)
                 }
@@ -353,11 +357,11 @@ impl Path {
                 if let Some(p) = port {
                     ss.push(format!(":{}", p));
                 }
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     ss.push("/".to_owned());
                     ss.push(self.segments.join("/"));
                 }
-                if query_params.len() > 0 {
+                if !query_params.is_empty() {
                     ss.push("?".to_owned());
                     ss.push(query_params.join("&"));
                 }
@@ -453,8 +457,8 @@ impl Path {
             ) => match (username, password) {
                 (Some(u), Some(p)) => format!("{u}:{p}"),
                 (None, Some(p)) => format!(":{p}"),
-                (Some(u), None) => format!("{u}"),
-                (None, None) => format!(""),
+                (Some(u), None) => u.to_string(),
+                (None, None) => String::new(),
             },
             (Host, Url { host, .. }) => match host {
                 HostKind::Domain(parts) => parts.join("."),
@@ -462,7 +466,7 @@ impl Path {
                 HostKind::Ipv6(addr) => addr.clone(),
             },
             (Tld, Url { host, .. }) => match host {
-                HostKind::Domain(parts) if parts.len() > 0 => parts.last().unwrap().clone(),
+                HostKind::Domain(parts) if !parts.is_empty() => parts.last().unwrap().clone(),
                 _ => String::new(), // Empty for IPv4/IPv6
             },
             (
@@ -470,7 +474,7 @@ impl Path {
                 Url {
                     query_params: qps, ..
                 },
-            ) if qps.len() > 0 => format!("?{}", qps.join("&")),
+            ) if !qps.is_empty() => format!("?{}", qps.join("&")),
             (
                 Fragment,
                 Url {
@@ -514,10 +518,10 @@ impl Path {
                 format!("{}{}{}", scheme_str, host_str, port_str)
             }
             // Segments
-            (Extension, _) if self.segments.len() > 0 => self.segments.last().unwrap().extension(),
-            (Stem, _) if self.segments.len() > 0 => self.segments.last().unwrap().stem(),
-            (Name, _) if self.segments.len() > 0 => self.segments.last().unwrap().clone().0,
-            (FilePrefix, _) if self.segments.len() > 0 => self.segments.last().unwrap().prefix(),
+            (Extension, _) if !self.segments.is_empty() => self.segments.last().unwrap().extension(),
+            (Stem, _) if !self.segments.is_empty() => self.segments.last().unwrap().stem(),
+            (Name, _) if !self.segments.is_empty() => self.segments.last().unwrap().clone().0,
+            (FilePrefix, _) if !self.segments.is_empty() => self.segments.last().unwrap().prefix(),
             _ => "".into(),
         }
     }
@@ -554,20 +558,20 @@ impl Path {
                 }
             }
             (Extension, _) => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     self.segments.last_mut().unwrap().set_extension(new_value);
                 }
             }
             (Stem, _) => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     self.segments.last_mut().unwrap().set_stem(new_value);
                 }
             }
-            (Name, _) if self.segments.len() > 0 => {
+            (Name, _) if !self.segments.is_empty() => {
                 self.segments.last_mut().unwrap().set_name(new_value);
             }
             (FilePrefix, _) => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     self.segments.last_mut().unwrap().set_prefix(new_value);
                 }
             }
@@ -641,7 +645,7 @@ impl Path {
             (Tld, Url { .. }) => {
                 if let PathKind::Url { host, .. } = &mut self.kind {
                     match host {
-                        HostKind::Domain(parts) if parts.len() > 0 => {
+                        HostKind::Domain(parts) if !parts.is_empty() => {
                             let len = parts.len();
                             parts[len - 1] = new_value.to_string();
                         }
@@ -651,8 +655,8 @@ impl Path {
             }
             (Queries, Url { .. }) => {
                 if let PathKind::Url { query_params, .. } = &mut self.kind {
-                    *query_params = if new_value.starts_with('?') {
-                        new_value[1..].split('&').map(|s| s.to_string()).collect()
+                    *query_params = if let Some(stripped) = new_value.strip_prefix('?') {
+                        stripped.split('&').map(|s| s.to_string()).collect()
                     } else if new_value.is_empty() {
                         Vec::new()
                     } else {
@@ -670,8 +674,8 @@ impl Path {
                 }
             }
             (Path, Url { .. }) => {
-                let path_str = if new_value.starts_with('/') {
-                    &new_value[1..]
+                let path_str = if let Some(stripped) = new_value.strip_prefix('/') {
+                    stripped
                 } else {
                     new_value
                 };
@@ -736,8 +740,8 @@ impl Path {
                             if let Some(bracket_end) = rest.find(']') {
                                 let ipv6_part = &rest[..=bracket_end];
                                 let after_bracket = &rest[bracket_end + 1..];
-                                if after_bracket.starts_with(':') {
-                                    (ipv6_part, Some(&after_bracket[1..]))
+                                if let Some(stripped) = after_bracket.strip_prefix(':') {
+                                    (ipv6_part, Some(stripped))
                                 } else {
                                     (ipv6_part, None)
                                 }
@@ -786,7 +790,7 @@ impl Path {
         match c {
             // Segment operations - delete by setting to empty
             Extension => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     let last = self.segments.last_mut().unwrap();
                     if last.len() > 1 {
                         last.0 = last.stem();
@@ -794,7 +798,7 @@ impl Path {
                 }
             }
             Stem => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     let last = self.segments.last_mut().unwrap();
                     if last.len() > 1 {
                         last.0 = last.extension();
@@ -804,12 +808,12 @@ impl Path {
                 }
             }
             Name => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     self.segments.pop();
                 }
             }
             FilePrefix => {
-                if self.segments.len() > 0 {
+                if !self.segments.is_empty() {
                     let last = self.segments.last_mut().unwrap();
                     let after = if last.len() > 1 {
                         format!(
@@ -868,7 +872,7 @@ impl Path {
             Tld => {
                 if let PathKind::Url { host, .. } = &mut self.kind {
                     match host {
-                        HostKind::Domain(parts) if parts.len() > 0 => {
+                        HostKind::Domain(parts) if !parts.is_empty() => {
                             parts.pop();
                         }
                         _ => { /* No-op for IPv4/IPv6 */ }
