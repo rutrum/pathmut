@@ -8,6 +8,13 @@ use url::{Host, ParseError, Url};
 
 use std::borrow::Borrow;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostKind {
+    Domain(Vec<String>), // Split by dots: ["api", "example", "com"]
+    Ipv4(String),        // "192.168.1.1"
+    Ipv6(String),        // "[::1]" (with brackets for serialization)
+}
+
 #[derive(Debug, Clone)]
 pub struct Path {
     segments: Vec<Segment>,
@@ -27,7 +34,8 @@ enum PathKind {
         scheme: Option<String>,
         username: Option<String>,
         password: Option<String>,
-        host: Vec<String>,
+        host: HostKind,
+        port: Option<u16>,
         query_params: Vec<String>,
         fragment: Option<String>,
     },
@@ -199,6 +207,19 @@ impl Path {
         } else {
             Some(url.username().to_owned())
         };
+        let host = match url.host() {
+            Some(Host::Domain(d)) => {
+                HostKind::Domain(d.split('.').map(|s| s.to_string()).collect())
+            }
+            Some(Host::Ipv4(ipv4)) => HostKind::Ipv4(ipv4.to_string()),
+            Some(Host::Ipv6(ipv6)) => {
+                // Store with brackets for serialization consistency
+                HostKind::Ipv6(format!("[{}]", ipv6))
+            }
+            None => HostKind::Domain(Vec::new()),
+        };
+        let port = url.port();
+
         Ok((
             Path {
                 segments,
@@ -206,13 +227,8 @@ impl Path {
                     scheme,
                     username,
                     password: url.password().map(|s| s.to_owned()),
-                    host: url
-                        .host()
-                        .map(|h| match h {
-                            Host::Domain(d) => d.split(".").map(|s| s.to_string()).collect(),
-                            _ => Vec::new(),
-                        })
-                        .unwrap_or(Vec::new()),
+                    host,
+                    port,
                     query_params: url.query_pairs().map(|(a, b)| format!("{a}={b}")).collect(),
                     fragment: url.fragment().map(|s| s.to_owned()),
                 },
@@ -312,6 +328,7 @@ impl Path {
                 username,
                 password,
                 host,
+                port,
                 query_params,
                 fragment,
             } => {
@@ -327,7 +344,15 @@ impl Path {
                     (None, None) => String::new(),
                 };
                 ss.push(userpass);
-                ss.push(host.join("."));
+                let host_str = match host {
+                    HostKind::Domain(parts) => parts.join("."),
+                    HostKind::Ipv4(addr) => addr.clone(),
+                    HostKind::Ipv6(addr) => addr.clone(),
+                };
+                ss.push(host_str);
+                if let Some(p) = port {
+                    ss.push(format!(":{}", p));
+                }
                 if self.segments.len() > 0 {
                     ss.push("/".to_owned());
                     ss.push(self.segments.join("/"));
@@ -367,6 +392,13 @@ pub enum Component {
     Path,
     Queries,
     Fragment,
+
+    // URL - New components
+    Port,   // Explicit port only
+    IP,     // IPv4 or IPv6 (whichever exists)
+    IPv4,   // IPv4 address (empty if not IPv4)
+    IPv6,   // IPv6 address (empty if not IPv6)
+    Origin, // scheme://host:port
 }
 
 impl Path {
@@ -424,10 +456,14 @@ impl Path {
                 (Some(u), None) => format!("{u}"),
                 (None, None) => format!(""),
             },
-            (Host, Url { host, .. }) => host.join("."),
-            (Tld, Url { host, .. }) => match host.len() {
-                0 | 1 => "".into(),
-                _ => host[host.len() - 1].clone(),
+            (Host, Url { host, .. }) => match host {
+                HostKind::Domain(parts) => parts.join("."),
+                HostKind::Ipv4(addr) => addr.clone(),
+                HostKind::Ipv6(addr) => addr.clone(),
+            },
+            (Tld, Url { host, .. }) => match host {
+                HostKind::Domain(parts) if parts.len() > 0 => parts.last().unwrap().clone(),
+                _ => String::new(), // Empty for IPv4/IPv6
             },
             (
                 Queries,
@@ -441,6 +477,42 @@ impl Path {
                     fragment: Some(s), ..
                 },
             ) => s.to_string(),
+            // URL - New components
+            (Port, Url { port, .. }) => port.map(|p| p.to_string()).unwrap_or_default(),
+            (IPv4, Url { host, .. }) => match host {
+                HostKind::Ipv4(addr) => addr.clone(),
+                _ => String::new(),
+            },
+            (IPv6, Url { host, .. }) => match host {
+                HostKind::Ipv6(addr) => addr.clone(),
+                _ => String::new(),
+            },
+            (IP, Url { host, .. }) => match host {
+                HostKind::Ipv4(addr) => addr.clone(),
+                HostKind::Ipv6(addr) => addr.clone(),
+                HostKind::Domain(_) => String::new(),
+            },
+            (
+                Origin,
+                Url {
+                    scheme, host, port, ..
+                },
+            ) => {
+                let scheme_str = scheme
+                    .as_ref()
+                    .map(|s| format!("{}://", s))
+                    .unwrap_or_default();
+
+                let host_str = match host {
+                    HostKind::Domain(parts) => parts.join("."),
+                    HostKind::Ipv4(addr) => addr.clone(),
+                    HostKind::Ipv6(addr) => addr.clone(),
+                };
+
+                let port_str = port.map(|p| format!(":{}", p)).unwrap_or_default();
+
+                format!("{}{}{}", scheme_str, host_str, port_str)
+            }
             // Segments
             (Extension, _) if self.segments.len() > 0 => self.segments.last().unwrap().extension(),
             (Stem, _) if self.segments.len() > 0 => self.segments.last().unwrap().stem(),
@@ -551,14 +623,29 @@ impl Path {
             }
             (Host, Url { .. }) => {
                 if let PathKind::Url { host, .. } = &mut self.kind {
-                    *host = new_value.split('.').map(|s| s.to_string()).collect();
+                    // Infer type from string format
+                    *host = if new_value.contains(':') && new_value.starts_with('[') {
+                        // IPv6 with brackets
+                        HostKind::Ipv6(new_value.to_string())
+                    } else if new_value.split('.').count() == 4
+                        && new_value.split('.').all(|p| p.parse::<u8>().is_ok())
+                    {
+                        // IPv4 (all parts are 0-255)
+                        HostKind::Ipv4(new_value.to_string())
+                    } else {
+                        // Domain
+                        HostKind::Domain(new_value.split('.').map(|s| s.to_string()).collect())
+                    };
                 }
             }
             (Tld, Url { .. }) => {
                 if let PathKind::Url { host, .. } = &mut self.kind {
-                    if host.len() > 0 {
-                        let len = host.len();
-                        host[len - 1] = new_value.to_string();
+                    match host {
+                        HostKind::Domain(parts) if parts.len() > 0 => {
+                            let len = parts.len();
+                            parts[len - 1] = new_value.to_string();
+                        }
+                        _ => { /* No-op for IPv4/IPv6 */ }
                     }
                 }
             }
@@ -593,6 +680,94 @@ impl Path {
                     .filter(|s| !s.is_empty())
                     .map(|s| Segment(s.to_string()))
                     .collect();
+            }
+            // URL - New components
+            (Port, Url { .. }) => {
+                if let PathKind::Url { port, .. } = &mut self.kind {
+                    *port = if new_value.is_empty() {
+                        None
+                    } else {
+                        new_value.parse::<u16>().ok()
+                    };
+                }
+            }
+            (IPv4, Url { .. }) => {
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    match host {
+                        HostKind::Ipv4(_) => {
+                            *host = HostKind::Ipv4(new_value.to_string());
+                        }
+                        _ => { /* No-op for Domain/IPv6 */ }
+                    }
+                }
+            }
+            (IPv6, Url { .. }) => {
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    match host {
+                        HostKind::Ipv6(_) => {
+                            // Ensure brackets for serialization
+                            let addr = if new_value.starts_with('[') {
+                                new_value.to_string()
+                            } else {
+                                format!("[{}]", new_value)
+                            };
+                            *host = HostKind::Ipv6(addr);
+                        }
+                        _ => { /* No-op for Domain/IPv4 */ }
+                    }
+                }
+            }
+            (IP, Url { .. }) => {
+                // IP is read-only - it returns either IPv4 or IPv6
+                // Setting it doesn't make sense, so this is a no-op
+            }
+            (Origin, Url { .. }) => {
+                if let PathKind::Url {
+                    scheme, host, port, ..
+                } = &mut self.kind
+                {
+                    // Parse origin string: scheme://host:port
+                    if let Some((scheme_part, rest)) = new_value.split_once("://") {
+                        *scheme = Some(scheme_part.to_string());
+
+                        // Parse host:port - handle IPv6 brackets
+                        let (host_part, port_part) = if rest.starts_with('[') {
+                            // IPv6 - find the closing bracket
+                            if let Some(bracket_end) = rest.find(']') {
+                                let ipv6_part = &rest[..=bracket_end];
+                                let after_bracket = &rest[bracket_end + 1..];
+                                if after_bracket.starts_with(':') {
+                                    (ipv6_part, Some(&after_bracket[1..]))
+                                } else {
+                                    (ipv6_part, None)
+                                }
+                            } else {
+                                (rest, None)
+                            }
+                        } else {
+                            // Domain or IPv4 - split on last colon
+                            if let Some((h, p)) = rest.rsplit_once(':') {
+                                (h, Some(p))
+                            } else {
+                                (rest, None)
+                            }
+                        };
+
+                        // Set port
+                        *port = port_part.and_then(|p| p.parse::<u16>().ok());
+
+                        // Set host (will infer type)
+                        *host = if host_part.contains(':') && host_part.starts_with('[') {
+                            HostKind::Ipv6(host_part.to_string())
+                        } else if host_part.split('.').count() == 4
+                            && host_part.split('.').all(|p| p.parse::<u8>().is_ok())
+                        {
+                            HostKind::Ipv4(host_part.to_string())
+                        } else {
+                            HostKind::Domain(host_part.split('.').map(|s| s.to_string()).collect())
+                        };
+                    }
+                }
             }
             _ => {
                 // Invalid operation (e.g., Scheme on Unix path) - no-op
@@ -687,13 +862,16 @@ impl Path {
             }
             Host => {
                 if let PathKind::Url { host, .. } = &mut self.kind {
-                    *host = Vec::new();
+                    *host = HostKind::Domain(Vec::new());
                 }
             }
             Tld => {
                 if let PathKind::Url { host, .. } = &mut self.kind {
-                    if host.len() > 0 {
-                        host.pop();
+                    match host {
+                        HostKind::Domain(parts) if parts.len() > 0 => {
+                            parts.pop();
+                        }
+                        _ => { /* No-op for IPv4/IPv6 */ }
                     }
                 }
             }
@@ -708,6 +886,29 @@ impl Path {
             Fragment => {
                 if let PathKind::Url { fragment, .. } = &mut self.kind {
                     *fragment = None;
+                }
+            }
+            // URL - New components
+            Port => {
+                if let PathKind::Url { port, .. } = &mut self.kind {
+                    *port = None;
+                }
+            }
+            IPv4 | IPv6 | IP => {
+                // Delete host entirely
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    *host = HostKind::Domain(Vec::new());
+                }
+            }
+            Origin => {
+                // Clear scheme, host, port
+                if let PathKind::Url {
+                    scheme, host, port, ..
+                } = &mut self.kind
+                {
+                    *scheme = None;
+                    *host = HostKind::Domain(Vec::new());
+                    *port = None;
                 }
             }
         }
@@ -792,6 +993,19 @@ mod test {
     #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value#fragment")]
     #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
     #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    // URLs with IPv4 addresses (http needed for IP recognition)
+    // TODO: write my own parser, I guess...
+    #[case("http://192.168.1.1")]
+    #[case("http://192.168.1.1:8080")]
+    // URLs with IPv6 addresses (http needed for IP recognition)
+    #[case("http://[::1]")]
+    #[case("http://[::1]:8080")]
+    // URLs with domain names and ports
+    #[case("scheme://sub.domain.tld:8080")]
+    // URLs with complex combinations
+    #[case("http://user:pass@192.168.1.1:8080/dir/file.ext?key=value#fragment")]
+    #[case("http://user@[::1]:8080/dir/file.ext?key=value#fragment")]
+    #[case("scheme://user:pass@sub.domain.tld:8080/dir/file.ext?key=value#fragment")]
     fn path_variations(#[case] path: &str) {}
 
     #[apply(path_variations)]
@@ -857,6 +1071,31 @@ mod test {
         }
         if path.contains("fragment") {
             assert_eq!(p.get(Component::Fragment), "fragment");
+        }
+        // Port assertions
+        if path.contains(":8080") {
+            assert_eq!(p.get(Component::Port), "8080", "{:?}", p);
+        }
+        // IPv4 assertions
+        if path.contains("192.168.1.1") {
+            assert_eq!(p.get(Component::IPv4), "192.168.1.1", "{:?}", p);
+            assert_eq!(p.get(Component::Host), "192.168.1.1", "{:?}", p);
+            assert_eq!(p.get(Component::Tld), "", "{:?}", p); // No TLD for IPs
+        }
+        // IPv6 assertions
+        if path.contains("[::1]") {
+            assert_eq!(p.get(Component::IPv6), "[::1]", "{:?}", p);
+            assert_eq!(p.get(Component::Host), "[::1]", "{:?}", p);
+            assert_eq!(p.get(Component::Tld), "", "{:?}", p); // No TLD for IPs
+        }
+        // Origin assertions (scheme + host + port)
+        if path.contains("scheme://sub.domain.tld:8080") {
+            assert_eq!(
+                p.get(Component::Origin),
+                "scheme://sub.domain.tld:8080",
+                "{:?}",
+                p
+            );
         }
     }
 
@@ -1286,6 +1525,53 @@ mod test {
             assert!(result.contains(".org"));
             assert!(result.contains("limit=50"));
             assert!(!result.contains("section"));
+        }
+    }
+
+    mod url_component_tests {
+        use super::*;
+
+        #[test]
+        fn tld_empty_for_ipv4() {
+            let p = Path::parse("http://192.168.1.1:8080/path");
+            assert_eq!(p.get(Component::Tld), "");
+            assert_eq!(p.get(Component::IPv4), "192.168.1.1");
+            assert_eq!(p.get(Component::Port), "8080");
+        }
+
+        #[test]
+        fn tld_empty_for_ipv6() {
+            let p = Path::parse("http://[::1]:8080");
+            assert_eq!(p.get(Component::Tld), "");
+            assert_eq!(p.get(Component::IPv6), "[::1]");
+            assert_eq!(p.get(Component::Port), "8080");
+        }
+
+        #[test]
+        fn port_explicit_only() {
+            let p1 = Path::parse("scheme://sub.domain.tld"); // No port
+            assert_eq!(p1.get(Component::Port), "");
+
+            let p2 = Path::parse("scheme://sub.domain.tld:8080"); // Explicit port
+            assert_eq!(p2.get(Component::Port), "8080");
+        }
+
+        #[test]
+        fn ip_component_returns_either_type() {
+            let p1 = Path::parse("http://192.168.1.1");
+            assert_eq!(p1.get(Component::IP), "192.168.1.1");
+
+            let p2 = Path::parse("http://[::1]");
+            assert_eq!(p2.get(Component::IP), "[::1]");
+
+            let p3 = Path::parse("scheme://sub.domain.tld");
+            assert_eq!(p3.get(Component::IP), "");
+        }
+
+        #[test]
+        fn origin_combines_scheme_host_port() {
+            let p = Path::parse("scheme://sub.domain.tld:8080/dir/file.ext?key=value#fragment");
+            assert_eq!(p.get(Component::Origin), "scheme://sub.domain.tld:8080");
         }
     }
 }
