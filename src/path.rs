@@ -2,9 +2,7 @@
 // build a data structure that deserialize and re-serialize any URL or Path
 // without losing any information
 
-use typed_path::{
-    Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefix,
-};
+use typed_path::{Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefix};
 
 use url::{Host, ParseError, Url};
 
@@ -260,15 +258,21 @@ impl Path {
                         Normal(s) => segment = Some(s),
                         Prefix(p) => {
                             prefix = Some(match p.kind() {
-                                Utf8WindowsPrefix::Verbatim(s) => WindowsPrefix::Verbatim(s.to_string()),
+                                Utf8WindowsPrefix::Verbatim(s) => {
+                                    WindowsPrefix::Verbatim(s.to_string())
+                                }
                                 Utf8WindowsPrefix::VerbatimUNC(s, t) => {
                                     WindowsPrefix::VerbatimUNC(s.to_string(), t.to_string())
                                 }
                                 Utf8WindowsPrefix::VerbatimDisk(s) => {
                                     WindowsPrefix::VerbatimDisk(s)
                                 }
-                                Utf8WindowsPrefix::DeviceNS(s) => WindowsPrefix::DeviceNS(s.to_string()),
-                                Utf8WindowsPrefix::UNC(s, t) => WindowsPrefix::UNC(s.to_string(), t.to_string()),
+                                Utf8WindowsPrefix::DeviceNS(s) => {
+                                    WindowsPrefix::DeviceNS(s.to_string())
+                                }
+                                Utf8WindowsPrefix::UNC(s, t) => {
+                                    WindowsPrefix::UNC(s.to_string(), t.to_string())
+                                }
                                 Utf8WindowsPrefix::Disk(s) => WindowsPrefix::Disk(s),
                             })
                         }
@@ -520,7 +524,10 @@ impl Path {
                 }
             }
             (Authority, Url { .. }) => {
-                if let PathKind::Url { username, password, .. } = &mut self.kind {
+                if let PathKind::Url {
+                    username, password, ..
+                } = &mut self.kind
+                {
                     if let Some((user, pass)) = new_value.split_once(':') {
                         *username = if user.is_empty() {
                             None
@@ -630,7 +637,10 @@ impl Path {
                 if self.segments.len() > 0 {
                     let last = self.segments.last_mut().unwrap();
                     let after = if last.len() > 1 {
-                        format!(".{}", last.0.split('.').skip(1).collect::<Vec<_>>().join("."))
+                        format!(
+                            ".{}",
+                            last.0.split('.').skip(1).collect::<Vec<_>>().join(".")
+                        )
                     } else {
                         String::new()
                     };
@@ -667,7 +677,10 @@ impl Path {
                 }
             }
             Authority => {
-                if let PathKind::Url { username, password, .. } = &mut self.kind {
+                if let PathKind::Url {
+                    username, password, ..
+                } = &mut self.kind
+                {
                     *username = None;
                     *password = None;
                 }
@@ -702,10 +715,67 @@ impl Path {
 }
 
 #[cfg(test)]
+use rstest_reuse;
+
+#[cfg(test)]
 mod test {
     use super::*;
 
     use rstest::rstest;
+    use rstest_reuse::{apply, template};
+
+    // Reusable template for path variations - used across multiple operation tests
+    #[template]
+    #[rstest]
+    // unix
+    #[case("file.stem.ext")]
+    #[case("dir/file.stem.ext")]
+    #[case("/file.stem.ext")]
+    #[case("/dir/file.stem.ext")]
+    #[case("file.ext")]
+    #[case("dir/file.ext")]
+    #[case("/file.ext")]
+    #[case("/dir/file.ext")]
+    // relative paths
+    #[case(".")]
+    #[case("..")]
+    #[case("./dir/file.ext")]
+    #[case("../dir/file.ext")]
+    #[case("././../dir/../file.ext")]
+    // windows
+    #[case(r"\file.stem.ext")]
+    #[case(r"\dir\file.stem.ext")]
+    #[case(r"\file.ext")]
+    #[case(r"\dir\file.ext")]
+    // windows prefix
+    #[case(r"Z:\dir\file.ext")]
+    #[case(r"Z:dir\file.ext")]
+    #[case(r"\\server\share")]
+    #[case(r"\\server\share\file.ext")]
+    #[case(r"\\?\dir\file.ext")]
+    #[case(r"\\?\UNC\server\share")]
+    #[case(r"\\?\Z:dir\file.ext")]
+    // urls - no suffix
+    #[case("scheme://sub.domain.tld/dir/file.ext")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext")]
+    // fragment
+    #[case("scheme://sub.domain.tld/dir/file.ext#fragment")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext#fragment")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext#fragment")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext#fragment")]
+    // query
+    #[case("scheme://sub.domain.tld/dir/file.ext?key=value")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value")]
+    // fragment and query
+    #[case("scheme://sub.domain.tld/dir/file.ext?key=value#fragment")]
+    #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
+    fn path_variations(#[case] path: &str) {}
 
     #[rstest]
     // UNIX PATHS
@@ -782,64 +852,8 @@ mod test {
         assert_eq!(path.to_string(), p.clone().serialize(), "{:?}", p);
     }
 
-    #[rstest]
-    // unix
-    #[case("file.stem.ext")]
-    #[case("dir/file.stem.ext")]
-    #[case("/file.stem.ext")]
-    #[case("/dir/file.stem.ext")]
-    #[case("file.ext")]
-    #[case("dir/file.ext")]
-    #[case("/file.ext")]
-    #[case("/dir/file.ext")]
-    // relative paths
-    #[case(".")]
-    #[case("..")]
-    #[case("./dir/file.ext")]
-    #[case("../dir/file.ext")]
-    #[case("././../dir/../file.ext")]
-    // windows
-    // #[case(r"dir\file.stem.ext")]  // parsed as unix
-    #[case(r"\file.stem.ext")]
-    #[case(r"\dir\file.stem.ext")]
-    // #[case(r"dir\file.ext")] // parsed as unix
-    #[case(r"\file.ext")]
-    #[case(r"\dir\file.ext")]
-    // these get parsed as unix paths, shouldn't they be urls?  I can check for . in top folder and not root
-    //#[case("sub.domain.tld")]
-    //#[case("sub.domain.tld/file.ext")]
-    //#[case("sub.domain.tld/dir/file.ext")]
-    // windows prefix
-    #[case(r"Z:\dir\file.ext")]
-    #[case(r"Z:dir\file.ext")]
-    #[case(r"\\server\share")]
-    #[case(r"\\server\share\file.ext")]
-    #[case(r"\\?\dir\file.ext")]
-    #[case(r"\\?\UNC\server\share")]
-    #[case(r"\\?\Z:dir\file.ext")]
-    // todo: DeviceNS, that's weird though, since it depends on fixed number of devices
-    // I dont really want to support that
-    // no suffix
-    #[case("scheme://sub.domain.tld/dir/file.ext")]
-    #[case("scheme://user@sub.domain.tld/dir/file.ext")]
-    #[case("scheme://:pass@sub.domain.tld/dir/file.ext")]
-    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext")]
-    // fragment
-    #[case("scheme://sub.domain.tld/dir/file.ext#fragment")]
-    #[case("scheme://user@sub.domain.tld/dir/file.ext#fragment")]
-    #[case("scheme://:pass@sub.domain.tld/dir/file.ext#fragment")]
-    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext#fragment")]
-    // query
-    #[case("scheme://sub.domain.tld/dir/file.ext?key=value")]
-    #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value")]
-    #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value")]
-    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value")]
-    // fragment and query
-    #[case("scheme://sub.domain.tld/dir/file.ext?key=value#fragment")]
-    #[case("scheme://user@sub.domain.tld/dir/file.ext?key=value#fragment")]
-    #[case("scheme://:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
-    #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
-    fn can_get(#[case] path: &str) {
+    #[apply(path_variations)]
+    fn can_get(path: &str) {
         let p = Path::parse(path);
         // segments
         if path.contains("ext") {
@@ -896,6 +910,390 @@ mod test {
         if path.contains("fragment") {
             assert_eq!(p.get(Component::Fragment), "fragment");
         }
+    }
+
+    #[apply(path_variations)]
+    fn can_set(path: &str) {
+        let original = Path::parse(path);
+
+        // Test segment components
+        if path.contains("ext") {
+            let mut p = original.clone();
+            p.set(Component::Extension, "NEW");
+            assert_eq!(p.get(Component::Extension), "NEW", "{:?}", p);
+            assert!(
+                !p.serialize().contains("ext"),
+                "Should not contain 'ext': {}",
+                p.serialize()
+            );
+        }
+
+        if path.contains("stem") {
+            let mut p = original.clone();
+            p.set(Component::Stem, "NEWSTEM");
+            assert_eq!(p.get(Component::Stem), "NEWSTEM", "{:?}", p);
+        }
+
+        if path.contains("file") {
+            let mut p = original.clone();
+            p.set(Component::Name, "NEWNAME");
+            assert_eq!(p.get(Component::Name), "NEWNAME", "{:?}", p);
+
+            let mut p = original.clone();
+            p.set(Component::FilePrefix, "NEWPREFIX");
+            assert_eq!(p.get(Component::FilePrefix), "NEWPREFIX", "{:?}", p);
+        }
+
+        // Test Windows components
+        if path.contains("Z:") || path.contains("Z") {
+            let mut p = original.clone();
+            p.set(Component::Disk, "X");
+            assert_eq!(p.get(Component::Disk), "X", "{:?}", p);
+        }
+
+        if path.contains("server") {
+            let mut p = original.clone();
+            let new_prefix = if path.contains("UNC") {
+                r"\\?\UNC\newserver\newshare"
+            } else {
+                r"\\newserver\newshare"
+            };
+            p.set(Component::Prefix, new_prefix);
+            assert_eq!(p.get(Component::Prefix), new_prefix, "{:?}", p);
+        }
+
+        // Test URL components
+        if path.contains("scheme") {
+            let mut p = original.clone();
+            p.set(Component::Scheme, "ftp");
+            assert_eq!(p.get(Component::Scheme), "ftp", "{:?}", p);
+            assert!(
+                !p.serialize().contains("scheme://"),
+                "Should not contain 'scheme://': {}",
+                p.serialize()
+            );
+        }
+
+        if path.contains("user") {
+            let mut p = original.clone();
+            p.set(Component::Username, "admin");
+            assert_eq!(p.get(Component::Username), "admin", "{:?}", p);
+        }
+
+        if path.contains("pass") {
+            let mut p = original.clone();
+            p.set(Component::Password, "newpass");
+            assert_eq!(p.get(Component::Password), "newpass", "{:?}", p);
+        }
+
+        if path.contains("domain") {
+            let mut p = original.clone();
+            p.set(Component::Host, "newhost.com");
+            assert_eq!(p.get(Component::Host), "newhost.com", "{:?}", p);
+        }
+
+        if path.contains("tld") {
+            let mut p = original.clone();
+            p.set(Component::Tld, "org");
+            assert_eq!(p.get(Component::Tld), "org", "{:?}", p);
+        }
+
+        if path.contains("key") {
+            let mut p = original.clone();
+            p.set(Component::Queries, "new=query");
+            assert_eq!(p.get(Component::Queries), "?new=query", "{:?}", p);
+        }
+
+        if path.contains("fragment") {
+            let mut p = original.clone();
+            p.set(Component::Fragment, "newfragment");
+            assert_eq!(p.get(Component::Fragment), "newfragment", "{:?}", p);
+        }
+    }
+
+    #[apply(path_variations)]
+    fn can_delete(path: &str) {
+        let original = Path::parse(path);
+
+        // Test segment components
+        // For segments, deleting a component doesn't mean the result won't have that component type
+        // Instead, verify the delete operation changes the path
+        if path.contains("ext") {
+            let mut p = original.clone();
+            let before = p.serialize();
+            p.delete(Component::Extension);
+            let after = p.serialize();
+            // Deletion should change the path
+            assert_ne!(before, after, "Delete should change path for {:?}", p);
+            assert!(
+                !after.contains(".ext"),
+                "Should not contain '.ext': {}",
+                after
+            );
+        }
+
+        if path.contains("file") {
+            let mut p = original.clone();
+            let before = p.serialize();
+            p.delete(Component::Name);
+            let after = p.serialize();
+            // Deleting name should change the path
+            if !before.ends_with('/') && !before.ends_with('\\') {
+                // Only check if it's not already a directory path
+                assert_ne!(
+                    before, after,
+                    "Delete name should change path for {:?}",
+                    original
+                );
+            }
+        }
+
+        // Test Windows components - these should actually clear when deleted
+        if path.contains("Z:") || path.contains("Z") {
+            let mut p = original.clone();
+            p.delete(Component::Disk);
+            assert_eq!(p.get(Component::Disk), "", "{:?}", p);
+        }
+
+        if path.contains("server") {
+            let mut p = original.clone();
+            p.delete(Component::Prefix);
+            // After deleting Windows prefix, it should be gone
+            let serialized = p.serialize();
+            assert!(
+                !serialized.contains("server"),
+                "Should not contain 'server': {}",
+                serialized
+            );
+        }
+
+        // Test URL components - these SHOULD return empty after deletion
+        if path.contains("scheme") {
+            let mut p = original.clone();
+            p.delete(Component::Scheme);
+            assert_eq!(p.get(Component::Scheme), "", "{:?}", p);
+        }
+
+        if path.contains("user") {
+            let mut p = original.clone();
+            p.delete(Component::Username);
+            assert_eq!(p.get(Component::Username), "", "{:?}", p);
+        }
+
+        if path.contains("pass") {
+            let mut p = original.clone();
+            p.delete(Component::Password);
+            assert_eq!(p.get(Component::Password), "", "{:?}", p);
+        }
+
+        if path.contains("domain") {
+            let mut p = original.clone();
+            let before_host = p.get(Component::Host);
+            p.delete(Component::Host);
+            let after_host = p.get(Component::Host);
+            // Deleting host should change it (but might not make it empty if there are path segments)
+            assert_ne!(
+                before_host, after_host,
+                "Delete should change host for {:?}",
+                p
+            );
+        }
+
+        if path.contains("tld") {
+            let mut p = original.clone();
+            let before_tld = p.get(Component::Tld);
+            p.delete(Component::Tld);
+            let after_tld = p.get(Component::Tld);
+            // Deleting TLD from "sub.domain.tld" gives "sub.domain" which has TLD "domain"
+            // So we verify it changed, not that it's empty
+            assert_ne!(
+                before_tld, after_tld,
+                "Delete should change TLD for {:?}",
+                p
+            );
+        }
+
+        if path.contains("key") {
+            let mut p = original.clone();
+            p.delete(Component::Queries);
+            assert_eq!(p.get(Component::Queries), "", "{:?}", p);
+        }
+
+        if path.contains("fragment") {
+            let mut p = original.clone();
+            p.delete(Component::Fragment);
+            assert_eq!(p.get(Component::Fragment), "", "{:?}", p);
+            assert!(
+                !p.serialize().contains("#fragment"),
+                "Should not contain '#fragment': {}",
+                p.serialize()
+            );
+        }
+    }
+
+    #[apply(path_variations)]
+    fn can_replace(path: &str) {
+        let original = Path::parse(path);
+
+        // Test replace succeeds when component exists
+        if path.contains("ext") {
+            let mut p = original.clone();
+            p.replace(Component::Extension, "REPLACED");
+            assert_eq!(p.get(Component::Extension), "REPLACED", "{:?}", p);
+        }
+
+        if path.contains("stem") {
+            let mut p = original.clone();
+            p.replace(Component::Stem, "REPLACED");
+            assert_eq!(p.get(Component::Stem), "REPLACED", "{:?}", p);
+        }
+
+        if path.contains("file") {
+            let mut p = original.clone();
+            p.replace(Component::Name, "REPLACED");
+            assert_eq!(p.get(Component::Name), "REPLACED", "{:?}", p);
+        }
+
+        if path.contains("Z:") || path.contains("Z") {
+            let mut p = original.clone();
+            p.replace(Component::Disk, "X");
+            assert_eq!(p.get(Component::Disk), "X", "{:?}", p);
+        }
+
+        if path.contains("scheme") {
+            let mut p = original.clone();
+            p.replace(Component::Scheme, "ftp");
+            assert_eq!(p.get(Component::Scheme), "ftp", "{:?}", p);
+        }
+
+        if path.contains("user") {
+            let mut p = original.clone();
+            p.replace(Component::Username, "admin");
+            assert_eq!(p.get(Component::Username), "admin", "{:?}", p);
+        }
+
+        if path.contains("fragment") {
+            let mut p = original.clone();
+            p.replace(Component::Fragment, "REPLACED");
+            assert_eq!(p.get(Component::Fragment), "REPLACED", "{:?}", p);
+        }
+
+        // Test replace is no-op when component doesn't exist
+        // For unix/windows paths without URLs, URL components should not be added
+        if !path.contains("scheme") && !path.contains("://") {
+            let mut p = original.clone();
+            let before = p.serialize();
+            p.replace(Component::Scheme, "SHOULD_NOT_APPEAR");
+            assert_eq!(
+                p.serialize(),
+                before,
+                "Replace should be no-op when component missing"
+            );
+            assert_eq!(p.get(Component::Scheme), "", "{:?}", p);
+        }
+
+        if !path.contains("fragment") {
+            let mut p = original.clone();
+            let before = p.serialize();
+            p.replace(Component::Fragment, "SHOULD_NOT_APPEAR");
+            assert_eq!(
+                p.serialize(),
+                before,
+                "Replace should be no-op when component missing"
+            );
+            assert_eq!(p.get(Component::Fragment), "", "{:?}", p);
+        }
+    }
+
+    #[apply(path_variations)]
+    fn can_has(path: &str) {
+        let p = Path::parse(path);
+
+        // Verify has() returns true for present components
+        // Extension exists if path contains ".ext" or ".stem.ext"
+        if path.contains("ext") {
+            assert!(p.has(Component::Extension), "{:?}", p);
+        }
+
+        // Stem/Name/FilePrefix exist for most file paths except "." and ".."
+        // Just verify they work correctly, don't assert they should be missing
+        if path != "." && path != ".." {
+            // Most paths have a name component
+            if path.contains("file")
+                || path.ends_with(".ext")
+                || path.contains(r"\")
+                || path.contains("/")
+            {
+                // If it looks like it has file components, verify has() works
+                let has_name = p.has(Component::Name);
+                let get_name = p.get(Component::Name);
+                assert_eq!(
+                    has_name,
+                    !get_name.is_empty(),
+                    "has() and get() should be consistent for Name in {:?}",
+                    p
+                );
+            }
+        }
+
+        // Windows components
+        if path.contains("Z:") || path.contains("Z") {
+            assert!(p.has(Component::Disk), "{:?}", p);
+        }
+
+        if path.contains("server") {
+            assert!(p.has(Component::Prefix), "{:?}", p);
+        }
+
+        // URL components
+        if path.contains("scheme") {
+            assert!(p.has(Component::Scheme), "{:?}", p);
+        }
+
+        if path.contains("user") {
+            assert!(p.has(Component::Username), "{:?}", p);
+        }
+
+        if path.contains("pass") {
+            assert!(p.has(Component::Password), "{:?}", p);
+        }
+
+        if path.contains("domain") {
+            assert!(p.has(Component::Host), "{:?}", p);
+        }
+
+        if path.contains("tld") {
+            assert!(p.has(Component::Tld), "{:?}", p);
+        }
+
+        if path.contains("key") {
+            assert!(p.has(Component::Queries), "{:?}", p);
+        }
+
+        if path.contains("fragment") {
+            assert!(p.has(Component::Fragment), "{:?}", p);
+        }
+
+        // Test the relationship: has() should be true iff get() is non-empty
+        // Do this for all components to ensure consistency
+        assert_eq!(
+            p.has(Component::Extension),
+            !p.get(Component::Extension).is_empty(),
+            "has(Extension) should match !get(Extension).is_empty() for {:?}",
+            p
+        );
+        assert_eq!(
+            p.has(Component::Scheme),
+            !p.get(Component::Scheme).is_empty(),
+            "has(Scheme) should match !get(Scheme).is_empty() for {:?}",
+            p
+        );
+        assert_eq!(
+            p.has(Component::Fragment),
+            !p.get(Component::Fragment).is_empty(),
+            "has(Fragment) should match !get(Fragment).is_empty() for {:?}",
+            p
+        );
     }
 
     #[rstest]
@@ -1043,7 +1441,7 @@ mod test {
         fn test_url_replace() {
             let mut path = Path::parse("https://example.com");
             path.replace(Component::Fragment, "section");
-            assert_eq!(path.get(Component::Fragment), "");  // replace only works if exists
+            assert_eq!(path.get(Component::Fragment), ""); // replace only works if exists
 
             path.set(Component::Fragment, "intro");
             path.replace(Component::Fragment, "conclusion");
