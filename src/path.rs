@@ -4,7 +4,6 @@
 
 use typed_path::{
     Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefix,
-    Utf8WindowsPrefixComponent,
 };
 
 use url::{Host, ParseError, Url};
@@ -12,18 +11,18 @@ use url::{Host, ParseError, Url};
 use std::borrow::Borrow;
 
 #[derive(Debug, Clone)]
-pub struct Path<'s> {
+pub struct Path {
     segments: Vec<Segment>,
-    kind: PathKind<'s>,
+    kind: PathKind,
 }
 
 #[derive(Debug, Clone)]
-enum PathKind<'s> {
+enum PathKind {
     Unix {
         root: bool,
     },
     Windows {
-        prefix: Option<WindowsPrefix<'s>>, // TODO: make my own prefix type
+        prefix: Option<WindowsPrefix>,
         root: bool,
     },
     Url {
@@ -37,16 +36,16 @@ enum PathKind<'s> {
 }
 
 #[derive(Debug, Clone)]
-enum WindowsPrefix<'s> {
-    Verbatim(&'s str),
-    VerbatimUNC(&'s str, &'s str),
+enum WindowsPrefix {
+    Verbatim(String),
+    VerbatimUNC(String, String),
     VerbatimDisk(char),
-    DeviceNS(&'s str),
-    UNC(&'s str, &'s str),
+    DeviceNS(String),
+    UNC(String, String),
     Disk(char),
 }
 
-impl WindowsPrefix<'_> {
+impl WindowsPrefix {
     fn to_string(&self) -> String {
         match self {
             WindowsPrefix::Verbatim(path) => format!(r"\\?\{}", path),
@@ -147,16 +146,32 @@ impl Borrow<str> for Segment {
     }
 }
 
-impl Path<'_> {
-    pub fn is_unix(self) -> bool {
+// Helper function to convert typed_path's prefix to our owned version
+fn convert_prefix_to_owned(prefix: Utf8WindowsPrefix) -> WindowsPrefix {
+    match prefix {
+        Utf8WindowsPrefix::Verbatim(s) => WindowsPrefix::Verbatim(s.to_string()),
+        Utf8WindowsPrefix::VerbatimUNC(server, share) => {
+            WindowsPrefix::VerbatimUNC(server.to_string(), share.to_string())
+        }
+        Utf8WindowsPrefix::VerbatimDisk(disk) => WindowsPrefix::VerbatimDisk(disk),
+        Utf8WindowsPrefix::DeviceNS(name) => WindowsPrefix::DeviceNS(name.to_string()),
+        Utf8WindowsPrefix::UNC(server, share) => {
+            WindowsPrefix::UNC(server.to_string(), share.to_string())
+        }
+        Utf8WindowsPrefix::Disk(disk) => WindowsPrefix::Disk(disk),
+    }
+}
+
+impl Path {
+    pub fn is_unix(&self) -> bool {
         matches!(self.kind, PathKind::Unix { .. })
     }
 
-    pub fn is_windows(self) -> bool {
+    pub fn is_windows(&self) -> bool {
         matches!(self.kind, PathKind::Windows { .. })
     }
 
-    pub fn is_url(self) -> bool {
+    pub fn is_url(&self) -> bool {
         matches!(self.kind, PathKind::Url { .. })
     }
 
@@ -170,7 +185,7 @@ impl Path<'_> {
         }
     }
 
-    pub fn parse_as_url<'a>(path_str: &'a str) -> Result<(Path<'a>, bool), ParseError> {
+    pub fn parse_as_url(path_str: &str) -> Result<(Path, bool), ParseError> {
         let url = Url::parse(path_str)?;
         let scheme = Some(url.scheme().to_owned());
         let segments = match url.path_segments() {
@@ -245,15 +260,15 @@ impl Path<'_> {
                         Normal(s) => segment = Some(s),
                         Prefix(p) => {
                             prefix = Some(match p.kind() {
-                                Utf8WindowsPrefix::Verbatim(s) => WindowsPrefix::Verbatim(s),
+                                Utf8WindowsPrefix::Verbatim(s) => WindowsPrefix::Verbatim(s.to_string()),
                                 Utf8WindowsPrefix::VerbatimUNC(s, t) => {
-                                    WindowsPrefix::VerbatimUNC(s, t)
+                                    WindowsPrefix::VerbatimUNC(s.to_string(), t.to_string())
                                 }
                                 Utf8WindowsPrefix::VerbatimDisk(s) => {
                                     WindowsPrefix::VerbatimDisk(s)
                                 }
-                                Utf8WindowsPrefix::DeviceNS(s) => WindowsPrefix::DeviceNS(s),
-                                Utf8WindowsPrefix::UNC(s, t) => WindowsPrefix::UNC(s, t),
+                                Utf8WindowsPrefix::DeviceNS(s) => WindowsPrefix::DeviceNS(s.to_string()),
+                                Utf8WindowsPrefix::UNC(s, t) => WindowsPrefix::UNC(s.to_string(), t.to_string()),
                                 Utf8WindowsPrefix::Disk(s) => WindowsPrefix::Disk(s),
                             })
                         }
@@ -350,7 +365,7 @@ pub enum Component {
     Fragment,
 }
 
-impl Path<'_> {
+impl Path {
     pub fn get(&self, c: Component) -> String {
         use Component::*;
         use PathKind::*;
@@ -440,27 +455,27 @@ impl Path<'_> {
         use PathKind::*;
         match (c, &self.kind) {
             // Windows
-            (
-                Prefix,
-                Windows {
-                    prefix: Some(p), ..
-                },
-            ) => {
-                // somehow parse new_value as a prefix
+            (Prefix, Windows { .. }) => {
+                if let PathKind::Windows { prefix, .. } = &mut self.kind {
+                    // Use typed_path to parse the prefix, then convert to owned
+                    let typed_path = Utf8TypedPath::derive(new_value);
+                    if let Utf8TypedPath::Windows(win) = typed_path {
+                        // Extract prefix from typed_path
+                        *prefix = win.components().next().and_then(|c| {
+                            if let Utf8WindowsComponent::Prefix(p) = c {
+                                Some(convert_prefix_to_owned(p.kind()))
+                            } else {
+                                None
+                            }
+                        });
+                    }
+                }
             }
-            (
-                Disk,
-                Windows {
-                    prefix: Some(p),
-                    root,
-                },
-            ) => {
-                self.kind = Windows {
-                    // redo this too
-                    // should disk be restricted to a character?
-                    prefix: Some(WindowsPrefix::Disk(new_value.chars().next().unwrap())),
-                    root: *root,
-                };
+            (Disk, Windows { .. }) => {
+                if let PathKind::Windows { prefix, .. } = &mut self.kind {
+                    let disk_char = new_value.chars().next().unwrap_or('C');
+                    *prefix = Some(WindowsPrefix::Disk(disk_char));
+                }
             }
             (Extension, _) => {
                 if self.segments.len() > 0 {
@@ -477,16 +492,211 @@ impl Path<'_> {
             }
             (FilePrefix, _) => {
                 if self.segments.len() > 0 {
-                    self.segments.last_mut().unwrap().set_stem(new_value);
+                    self.segments.last_mut().unwrap().set_prefix(new_value);
                 }
             }
-            _ => todo!(),
+            // URL component setters
+            (Scheme, Url { .. }) => {
+                if let PathKind::Url { scheme, .. } = &mut self.kind {
+                    *scheme = Some(new_value.to_string());
+                }
+            }
+            (Username, Url { .. }) => {
+                if let PathKind::Url { username, .. } = &mut self.kind {
+                    *username = if new_value.is_empty() {
+                        None
+                    } else {
+                        Some(new_value.to_string())
+                    };
+                }
+            }
+            (Password, Url { .. }) => {
+                if let PathKind::Url { password, .. } = &mut self.kind {
+                    *password = if new_value.is_empty() {
+                        None
+                    } else {
+                        Some(new_value.to_string())
+                    };
+                }
+            }
+            (Authority, Url { .. }) => {
+                if let PathKind::Url { username, password, .. } = &mut self.kind {
+                    if let Some((user, pass)) = new_value.split_once(':') {
+                        *username = if user.is_empty() {
+                            None
+                        } else {
+                            Some(user.to_string())
+                        };
+                        *password = if pass.is_empty() {
+                            None
+                        } else {
+                            Some(pass.to_string())
+                        };
+                    } else {
+                        *username = if new_value.is_empty() {
+                            None
+                        } else {
+                            Some(new_value.to_string())
+                        };
+                        *password = None;
+                    }
+                }
+            }
+            (Host, Url { .. }) => {
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    *host = new_value.split('.').map(|s| s.to_string()).collect();
+                }
+            }
+            (Tld, Url { .. }) => {
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    if host.len() > 0 {
+                        let len = host.len();
+                        host[len - 1] = new_value.to_string();
+                    }
+                }
+            }
+            (Queries, Url { .. }) => {
+                if let PathKind::Url { query_params, .. } = &mut self.kind {
+                    *query_params = if new_value.starts_with('?') {
+                        new_value[1..].split('&').map(|s| s.to_string()).collect()
+                    } else if new_value.is_empty() {
+                        Vec::new()
+                    } else {
+                        new_value.split('&').map(|s| s.to_string()).collect()
+                    };
+                }
+            }
+            (Fragment, Url { .. }) => {
+                if let PathKind::Url { fragment, .. } = &mut self.kind {
+                    *fragment = if new_value.is_empty() {
+                        None
+                    } else {
+                        Some(new_value.to_string())
+                    };
+                }
+            }
+            (Path, Url { .. }) => {
+                let path_str = if new_value.starts_with('/') {
+                    &new_value[1..]
+                } else {
+                    new_value
+                };
+                self.segments = path_str
+                    .split('/')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| Segment(s.to_string()))
+                    .collect();
+            }
+            _ => {
+                // Invalid operation (e.g., Scheme on Unix path) - no-op
+            }
         }
     }
 
     pub fn replace(&mut self, c: Component, new_value: &str) {
         if !self.get(c).is_empty() {
             self.set(c, new_value);
+        }
+    }
+
+    pub fn delete(&mut self, c: Component) {
+        use Component::*;
+        match c {
+            // Segment operations - delete by setting to empty
+            Extension => {
+                if self.segments.len() > 0 {
+                    let last = self.segments.last_mut().unwrap();
+                    if last.len() > 1 {
+                        last.0 = last.stem();
+                    }
+                }
+            }
+            Stem => {
+                if self.segments.len() > 0 {
+                    let last = self.segments.last_mut().unwrap();
+                    if last.len() > 1 {
+                        last.0 = last.extension();
+                    } else {
+                        last.0 = String::new();
+                    }
+                }
+            }
+            Name => {
+                if self.segments.len() > 0 {
+                    self.segments.pop();
+                }
+            }
+            FilePrefix => {
+                if self.segments.len() > 0 {
+                    let last = self.segments.last_mut().unwrap();
+                    let after = if last.len() > 1 {
+                        format!(".{}", last.0.split('.').skip(1).collect::<Vec<_>>().join("."))
+                    } else {
+                        String::new()
+                    };
+                    last.0 = after;
+                }
+            }
+
+            // Windows operations
+            Disk => {
+                if let PathKind::Windows { prefix, .. } = &mut self.kind {
+                    *prefix = None;
+                }
+            }
+            Prefix => {
+                if let PathKind::Windows { prefix, .. } = &mut self.kind {
+                    *prefix = None;
+                }
+            }
+
+            // URL operations
+            Scheme => {
+                if let PathKind::Url { scheme, .. } = &mut self.kind {
+                    *scheme = None;
+                }
+            }
+            Username => {
+                if let PathKind::Url { username, .. } = &mut self.kind {
+                    *username = None;
+                }
+            }
+            Password => {
+                if let PathKind::Url { password, .. } = &mut self.kind {
+                    *password = None;
+                }
+            }
+            Authority => {
+                if let PathKind::Url { username, password, .. } = &mut self.kind {
+                    *username = None;
+                    *password = None;
+                }
+            }
+            Host => {
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    *host = Vec::new();
+                }
+            }
+            Tld => {
+                if let PathKind::Url { host, .. } = &mut self.kind {
+                    if host.len() > 0 {
+                        host.pop();
+                    }
+                }
+            }
+            Path => {
+                self.segments.clear();
+            }
+            Queries => {
+                if let PathKind::Url { query_params, .. } = &mut self.kind {
+                    *query_params = Vec::new();
+                }
+            }
+            Fragment => {
+                if let PathKind::Url { fragment, .. } = &mut self.kind {
+                    *fragment = None;
+                }
+            }
         }
     }
 }
@@ -735,5 +945,157 @@ mod test {
         // if the first segment has no schema/authority and is relative, assume unix
         assert!(Path::parse(r"../rutrum").is_unix());
         assert!(Path::parse(r"./rutrum").is_unix());
+    }
+
+    // URL manipulation tests
+    mod url_tests {
+        use super::*;
+
+        #[test]
+        fn test_url_scheme_get_set() {
+            let mut path = Path::parse("https://example.com");
+            assert_eq!(path.get(Component::Scheme), "https");
+            path.set(Component::Scheme, "http");
+            assert_eq!(path.serialize(), "http://example.com");
+        }
+
+        #[test]
+        fn test_url_host_get_set() {
+            let mut path = Path::parse("https://api.github.com");
+            assert_eq!(path.get(Component::Host), "api.github.com");
+            path.set(Component::Host, "gitlab.com");
+            assert_eq!(path.serialize(), "https://gitlab.com");
+        }
+
+        #[test]
+        fn test_url_tld_get_set() {
+            let mut path = Path::parse("https://example.com");
+            assert_eq!(path.get(Component::Tld), "com");
+            path.set(Component::Tld, "org");
+            assert_eq!(path.serialize(), "https://example.org");
+        }
+
+        #[test]
+        fn test_url_queries_get_set() {
+            let mut path = Path::parse("https://example.com?page=1&limit=10");
+            assert_eq!(path.get(Component::Queries), "?page=1&limit=10");
+            path.set(Component::Queries, "page=2");
+            assert_eq!(path.get(Component::Queries), "?page=2");
+        }
+
+        #[test]
+        fn test_url_fragment_get_set() {
+            let mut path = Path::parse("https://example.com#section");
+            assert_eq!(path.get(Component::Fragment), "section");
+            path.set(Component::Fragment, "header");
+            assert_eq!(path.serialize(), "https://example.com#header");
+        }
+
+        #[test]
+        fn test_url_username_password() {
+            let mut path = Path::parse("https://user:pass@example.com");
+            assert_eq!(path.get(Component::Username), "user");
+            assert_eq!(path.get(Component::Password), "pass");
+            path.set(Component::Username, "admin");
+            assert_eq!(path.get(Component::Authority), "admin:pass");
+        }
+
+        #[test]
+        fn test_url_delete_components() {
+            let mut path = Path::parse("https://user:pass@example.com/path?query#fragment");
+            path.delete(Component::Fragment);
+            assert_eq!(path.get(Component::Fragment), "");
+            path.delete(Component::Queries);
+            assert_eq!(path.get(Component::Queries), "");
+            path.delete(Component::Username);
+            assert_eq!(path.get(Component::Username), "");
+        }
+
+        #[test]
+        fn test_url_path_segments() {
+            let mut path = Path::parse("https://example.com/api/v1/users");
+            assert_eq!(path.get(Component::Name), "users");
+            path.set(Component::Name, "repos");
+            assert_eq!(path.serialize(), "https://example.com/api/v1/repos");
+        }
+
+        #[test]
+        fn test_url_extension_on_path() {
+            let mut path = Path::parse("https://example.com/file.json");
+            assert_eq!(path.get(Component::Extension), "json");
+            path.set(Component::Extension, "xml");
+            assert_eq!(path.serialize(), "https://example.com/file.xml");
+        }
+
+        #[test]
+        fn test_url_authority_parsing() {
+            let mut path = Path::parse("https://example.com");
+            path.set(Component::Authority, "user:password");
+            assert_eq!(path.get(Component::Username), "user");
+            assert_eq!(path.get(Component::Password), "password");
+
+            path.set(Component::Authority, "user");
+            assert_eq!(path.get(Component::Username), "user");
+            assert_eq!(path.get(Component::Password), "");
+        }
+
+        #[test]
+        fn test_url_replace() {
+            let mut path = Path::parse("https://example.com");
+            path.replace(Component::Fragment, "section");
+            assert_eq!(path.get(Component::Fragment), "");  // replace only works if exists
+
+            path.set(Component::Fragment, "intro");
+            path.replace(Component::Fragment, "conclusion");
+            assert_eq!(path.get(Component::Fragment), "conclusion");
+        }
+
+        #[test]
+        fn test_url_has() {
+            let path = Path::parse("https://user:pass@example.com/path?query#fragment");
+            assert!(path.has(Component::Scheme));
+            assert!(path.has(Component::Username));
+            assert!(path.has(Component::Password));
+            assert!(path.has(Component::Host));
+            assert!(path.has(Component::Queries));
+            assert!(path.has(Component::Fragment));
+
+            let minimal = Path::parse("https://example.com");
+            assert!(!minimal.has(Component::Username));
+            assert!(!minimal.has(Component::Fragment));
+        }
+
+        #[test]
+        fn test_url_path_component() {
+            let mut path = Path::parse("https://example.com/old/path");
+            path.set(Component::Path, "/new/path/here");
+            assert_eq!(path.serialize(), "https://example.com/new/path/here");
+        }
+
+        #[test]
+        fn test_url_empty_components() {
+            let mut path = Path::parse("https://user@example.com");
+            assert_eq!(path.get(Component::Username), "user");
+            assert_eq!(path.get(Component::Password), "");
+
+            path.set(Component::Username, "");
+            assert_eq!(path.get(Component::Username), "");
+        }
+
+        #[test]
+        fn test_url_multiple_operations() {
+            let mut path = Path::parse("http://api.example.com/v1/users?page=1#section");
+
+            path.set(Component::Scheme, "https");
+            path.set(Component::Tld, "org");
+            path.set(Component::Queries, "limit=50");
+            path.delete(Component::Fragment);
+
+            let result = path.serialize();
+            assert!(result.starts_with("https://"));
+            assert!(result.contains(".org"));
+            assert!(result.contains("limit=50"));
+            assert!(!result.contains("section"));
+        }
     }
 }
