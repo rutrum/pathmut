@@ -384,7 +384,7 @@ pub enum Component {
 
     // Windows
     Disk,
-    Prefix,
+    WindowsPrefix,
 
     // URL
     Scheme,
@@ -405,6 +405,38 @@ pub enum Component {
     Origin, // scheme://host:port
 }
 
+impl TryFrom<&str> for Component {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        use Component::*;
+        match s {
+            "ext" | "extension" => Ok(Extension),
+            "stem" => Ok(Stem),
+            "name" => Ok(Name),
+            "prefix" | "fileprefix" => Ok(FilePrefix),
+            "disk" => Ok(Disk),
+            "winprefix" => Ok(WindowsPrefix),
+            // URL components
+            "scheme" => Ok(Scheme),
+            "username" | "user" => Ok(Username),
+            "password" | "pass" => Ok(Password),
+            "authority" | "auth" => Ok(Authority),
+            "host" => Ok(Host),
+            "tld" => Ok(Tld),
+            "path" => Ok(Path),
+            "queries" | "query" => Ok(Queries),
+            "fragment" | "frag" => Ok(Fragment),
+            "port" => Ok(Port),
+            "ip" => Ok(IP),
+            "ipv4" => Ok(IPv4),
+            "ipv6" => Ok(IPv6),
+            "origin" => Ok(Origin),
+            _ => Err(format!("unknown component: {}", s)),
+        }
+    }
+}
+
 impl Path {
     pub fn get(&self, c: Component) -> String {
         use Component::*;
@@ -412,7 +444,7 @@ impl Path {
         match (c, &self.kind) {
             // windows
             (
-                Prefix,
+                WindowsPrefix,
                 Windows {
                     prefix: Some(p), ..
                 },
@@ -423,10 +455,10 @@ impl Path {
                     prefix: Some(p), ..
                 },
             ) => {
-                use WindowsPrefix::*;
+                use self::WindowsPrefix::*;
                 match p {
                     VerbatimDisk(disk) => (*disk).into(),
-                    Disk(disk) => (*disk).into(),
+                    self::WindowsPrefix::Disk(disk) => (*disk).into(),
                     _ => String::new(),
                 }
             }
@@ -518,7 +550,9 @@ impl Path {
                 format!("{}{}{}", scheme_str, host_str, port_str)
             }
             // Segments
-            (Extension, _) if !self.segments.is_empty() => self.segments.last().unwrap().extension(),
+            (Extension, _) if !self.segments.is_empty() => {
+                self.segments.last().unwrap().extension()
+            }
             (Stem, _) if !self.segments.is_empty() => self.segments.last().unwrap().stem(),
             (Name, _) if !self.segments.is_empty() => self.segments.last().unwrap().clone().0,
             (FilePrefix, _) if !self.segments.is_empty() => self.segments.last().unwrap().prefix(),
@@ -535,7 +569,7 @@ impl Path {
         use PathKind::*;
         match (c, &self.kind) {
             // Windows
-            (Prefix, Windows { .. }) => {
+            (WindowsPrefix, Windows { .. }) => {
                 if let PathKind::Windows { prefix, .. } = &mut self.kind {
                     // Use typed_path to parse the prefix, then convert to owned
                     let typed_path = Utf8TypedPath::derive(new_value);
@@ -554,7 +588,7 @@ impl Path {
             (Disk, Windows { .. }) => {
                 if let PathKind::Windows { prefix, .. } = &mut self.kind {
                     let disk_char = new_value.chars().next().unwrap_or('C');
-                    *prefix = Some(WindowsPrefix::Disk(disk_char));
+                    *prefix = Some(self::WindowsPrefix::Disk(disk_char));
                 }
             }
             (Extension, _) => {
@@ -833,7 +867,7 @@ impl Path {
                     *prefix = None;
                 }
             }
-            Prefix => {
+            WindowsPrefix => {
                 if let PathKind::Windows { prefix, .. } = &mut self.kind {
                     *prefix = None;
                 }
@@ -1042,9 +1076,19 @@ mod test {
         }
         if path.contains("server") {
             if path.contains("UNC") {
-                assert_eq!(p.get(Component::Prefix), r"\\?\UNC\server\share", "{:?}", p);
+                assert_eq!(
+                    p.get(Component::WindowsPrefix),
+                    r"\\?\UNC\server\share",
+                    "{:?}",
+                    p
+                );
             } else {
-                assert_eq!(p.get(Component::Prefix), r"\\server\share", "{:?}", p);
+                assert_eq!(
+                    p.get(Component::WindowsPrefix),
+                    r"\\server\share",
+                    "{:?}",
+                    p
+                );
             }
         }
 
@@ -1149,8 +1193,8 @@ mod test {
             } else {
                 r"\\newserver\newshare"
             };
-            p.set(Component::Prefix, new_prefix);
-            assert_eq!(p.get(Component::Prefix), new_prefix, "{:?}", p);
+            p.set(Component::WindowsPrefix, new_prefix);
+            assert_eq!(p.get(Component::WindowsPrefix), new_prefix, "{:?}", p);
         }
 
         // Test URL components
@@ -1248,7 +1292,7 @@ mod test {
 
         if path.contains("server") {
             let mut p = original.clone();
-            p.delete(Component::Prefix);
+            p.delete(Component::WindowsPrefix);
             // After deleting Windows prefix, it should be gone
             let serialized = p.serialize();
             assert!(
@@ -1433,7 +1477,7 @@ mod test {
         }
 
         if path.contains("server") {
-            assert!(p.has(Component::Prefix), "{:?}", p);
+            assert!(p.has(Component::WindowsPrefix), "{:?}", p);
         }
 
         // URL components
