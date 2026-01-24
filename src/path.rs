@@ -741,12 +741,15 @@ mod test {
     #[case("..")]
     #[case("./dir/file.ext")]
     #[case("../dir/file.ext")]
-    #[case("././../dir/../file.ext")]
+    // unix - basic paths
+    #[case("/")]
     // windows
     #[case(r"\file.stem.ext")]
     #[case(r"\dir\file.stem.ext")]
     #[case(r"\file.ext")]
     #[case(r"\dir\file.ext")]
+    // windows - basic paths
+    #[case(r"\")]
     // windows prefix
     #[case(r"Z:\dir\file.ext")]
     #[case(r"Z:dir\file.ext")]
@@ -755,6 +758,20 @@ mod test {
     #[case(r"\\?\dir\file.ext")]
     #[case(r"\\?\UNC\server\share")]
     #[case(r"\\?\Z:dir\file.ext")]
+    #[case(r"\\?\Z:\dir\file.ext")]
+    // windows prefix - simple variants
+    #[case(r"\\.\COM42")] // DeviceNS
+    #[case(r"C:\folder")]
+    #[case(r"\\?\folder")]
+    #[case(r"\\?\C:")]
+    #[case(r"\\server\share\folder")]
+    // path traversal edge cases
+    #[case("in/../in/../in")]
+    #[case(r"in\..\in\..\in")]
+    // Future support for redundant path separators (commented for now):
+    // #[case("one/./././two")]
+    // #[case("//mnt")]
+    // #[case("usr//bin//bash")]
     // urls - no suffix
     #[case("scheme://sub.domain.tld/dir/file.ext")]
     #[case("scheme://user@sub.domain.tld/dir/file.ext")]
@@ -777,77 +794,8 @@ mod test {
     #[case("scheme://user:pass@sub.domain.tld/dir/file.ext?key=value#fragment")]
     fn path_variations(#[case] path: &str) {}
 
-    #[rstest]
-    // UNIX PATHS
-
-    // root, path segments, file parts
-    #[case("/path/to/file.txt")]
-    #[case("file")]
-    #[case("file.txt")]
-    #[case("/")]
-    #[case("/folder")]
-    #[case("/path/to/file.tar.gz")]
-    // relative paths
-    #[case(".")]
-    #[case("./folder")]
-    #[case("..")]
-    #[case("../folder")]
-    #[case("../path/to/file.txt")]
-    #[case("in/../in/../in")]
-    // redundant current directory: see note below
-    //#[case("one/./././two")]
-    // double separators: these are _very_ deep in the typed path module
-    // there is no way to modify this behavior.  To support this, I would need
-    // to write my own parser
-    //#[case("//mnt")]
-    //#[case("usr//bin//bash")]
-
-    // WINDOWS PATHS
-    #[case(r"\path\to\file.txt")]
-    #[case(r"\file.txt")]
-    #[case(r"\folder")]
-    #[case(r"\")]
-    #[case(r"path\to\file.txt")] // this may not be parsed as windows
-    // relative
-    #[case(r".\folder")]
-    #[case(r"..\folder")]
-    #[case(r"..\path\to\file.txt")]
-    #[case(r"in\..\in\..\in")]
-    // prefixes
-    // these may not be parsing correctly, but it may not matter
-    // not sure I want to provide a way to change these, besides disk
-    #[case(r"C:\folder")]
-    #[case(r"C:folder")]
-    #[case(r"\\?\folder")]
-    #[case(r"\\?\UNC\server\share")]
-    #[case(r"\\?\C:")]
-    #[case(r"\\.\COM42")]
-    #[case(r"\\server\share")]
-    // URLS
-    // domains
-    #[case("github.com")]
-    #[case("rutrum.github.io")]
-    #[case("machine.left-right.ts.net")]
-    // schemes
-    #[case("https://github.com")]
-    #[case("smtp://gmail.com")]
-    // authority
-    #[case("ssh://user:pass@github.com")]
-    #[case("ssh://user@github.com")]
-    #[case("ssh://:pass@github.com")]
-    // paths
-    #[case("file:///path/to/file")]
-    #[case("file:///file.tar.gz")]
-    // query_params, fragments
-    #[case("http://example.com/path/file.csv#a=5")]
-    #[case("http://example.com/path/file.csv?a=5")]
-    #[case("http://example.com/path/file.csv?a=5&b=2")]
-    #[case("http://example.com/path/file.csv?a=5&b=2#f=3")]
-    #[case("/path/file.csv#a=5")]
-    #[case("/path/file.csv?a=5")]
-    #[case("/path/file.csv?a=5&b=2")]
-    #[case("/path/file.csv?a=5&b=2#f=3")]
-    fn identity(#[case] path: &str) {
+    #[apply(path_variations)]
+    fn identity(path: &str) {
         let p = Path::parse(path);
         assert_eq!(path.to_string(), p.clone().serialize(), "{:?}", p);
     }
