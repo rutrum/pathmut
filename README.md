@@ -70,6 +70,19 @@ Why stop at paths?  A command line utility built to mutate URIs like "scheme://u
 
 ## Changelog
 
+### 0.8.0
+
+* Add URL parsing with `-u`/`--as-url` flag
+* Add URL components: `scheme`, `host`, `port`, `path`, `query`, `frag`, `user`, `pass`, `origin`, `tld`
+* Add `info` command to print detailed path information
+  * `--json` flag to output as JSON instead of YAML
+* Add `is url` question to check if a path is a URL
+* Rename `prefix` component to `winprefix` for Windows path prefix
+* Change `-u` short flag to mean `--as-url`; unix paths now use `-x`/`--as-unix`
+* Remove `normalize` command
+* Remove `-n`/`--normalize` flag
+* Remove `is normalized` question
+
 ### 0.7.0
 
 * Normalize flag `-n` that can apply normalization to the paths before any command
