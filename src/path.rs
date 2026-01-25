@@ -2,7 +2,10 @@
 // build a data structure that deserialize and re-serialize any URL or Path
 // without losing any information
 
-use typed_path::{Utf8TypedPath, Utf8UnixComponent, Utf8WindowsComponent, Utf8WindowsPrefix};
+use typed_path::{
+    Utf8TypedPath, Utf8UnixComponent, Utf8UnixPath, Utf8WindowsComponent, Utf8WindowsPath,
+    Utf8WindowsPrefix,
+};
 
 use url::{Host, ParseError, Url};
 
@@ -185,6 +188,32 @@ impl Path {
         matches!(self.kind, PathKind::Url { .. })
     }
 
+    /// Convert this path to Unix format, preserving segments
+    pub fn to_unix(&self) -> Path {
+        let root = match &self.kind {
+            PathKind::Unix { root } => *root,
+            PathKind::Windows { root, .. } => *root,
+            PathKind::Url { .. } => false,
+        };
+        Path {
+            segments: self.segments.clone(),
+            kind: PathKind::Unix { root },
+        }
+    }
+
+    /// Convert this path to Windows format, preserving segments
+    pub fn to_windows(&self) -> Path {
+        let (root, prefix) = match &self.kind {
+            PathKind::Unix { root } => (*root, None),
+            PathKind::Windows { root, prefix } => (*root, prefix.clone()),
+            PathKind::Url { .. } => (false, None),
+        };
+        Path {
+            segments: self.segments.clone(),
+            kind: PathKind::Windows { root, prefix },
+        }
+    }
+
     pub fn parse(path_str: &str) -> Path {
         let as_url = Path::parse_as_url(path_str);
         let as_path = Path::parse_as_typed_path(path_str);
@@ -306,6 +335,73 @@ impl Path {
                     kind: PathKind::Windows { root, prefix },
                 }
             }
+        }
+    }
+
+    /// Parse the string explicitly as a Unix path
+    pub fn parse_as_unix(path_str: &str) -> Path {
+        let path = Utf8UnixPath::new(path_str);
+        let mut segments = Vec::new();
+        let mut root = false;
+
+        for component in path.components() {
+            use Utf8UnixComponent::*;
+            let mut segment = None;
+            match component {
+                RootDir => root = true,
+                CurDir => segment = Some("."),
+                ParentDir => segment = Some(".."),
+                Normal(s) => segment = Some(s),
+            };
+            if let Some(s) = segment {
+                segments.push(Segment(s.to_string()))
+            }
+        }
+
+        Path {
+            segments,
+            kind: PathKind::Unix { root },
+        }
+    }
+
+    /// Parse the string explicitly as a Windows path
+    pub fn parse_as_windows(path_str: &str) -> Path {
+        let path = Utf8WindowsPath::new(path_str);
+        let mut segments = Vec::new();
+        let mut prefix = None;
+        let mut root = false;
+
+        for component in path.components() {
+            use Utf8WindowsComponent::*;
+            let mut segment = None;
+            match component {
+                RootDir => root = true,
+                CurDir => segment = Some("."),
+                ParentDir => segment = Some(".."),
+                Normal(s) => segment = Some(s),
+                Prefix(p) => {
+                    prefix = Some(match p.kind() {
+                        Utf8WindowsPrefix::Verbatim(s) => WindowsPrefix::Verbatim(s.to_string()),
+                        Utf8WindowsPrefix::VerbatimUNC(s, t) => {
+                            WindowsPrefix::VerbatimUNC(s.to_string(), t.to_string())
+                        }
+                        Utf8WindowsPrefix::VerbatimDisk(s) => WindowsPrefix::VerbatimDisk(s),
+                        Utf8WindowsPrefix::DeviceNS(s) => WindowsPrefix::DeviceNS(s.to_string()),
+                        Utf8WindowsPrefix::UNC(s, t) => {
+                            WindowsPrefix::Unc(s.to_string(), t.to_string())
+                        }
+                        Utf8WindowsPrefix::Disk(s) => WindowsPrefix::Disk(s),
+                    })
+                }
+            };
+            if let Some(s) = segment {
+                segments.push(Segment(s.to_string()))
+            }
+        }
+
+        Path {
+            segments,
+            kind: PathKind::Windows { root, prefix },
         }
     }
 
@@ -438,6 +534,22 @@ impl TryFrom<&str> for Component {
 }
 
 impl Path {
+    /// Returns the depth of the path.
+    /// For absolute paths (with root), this is the number of segments.
+    /// For relative paths (without root), this is segments - 1 (treating first segment as depth 0).
+    pub fn depth(&self) -> usize {
+        let has_root = match &self.kind {
+            PathKind::Unix { root } => *root,
+            PathKind::Windows { root, .. } => *root,
+            PathKind::Url { .. } => false,
+        };
+        if has_root {
+            self.segments.len()
+        } else {
+            self.segments.len().saturating_sub(1)
+        }
+    }
+
     pub fn get(&self, c: Component) -> String {
         use Component::*;
         use PathKind::*;

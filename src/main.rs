@@ -3,50 +3,30 @@ use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
 use std::process::ExitCode;
-use typed_path::{
-    PathType, TypedComponent, TypedPath, TypedPathBuf, UnixComponent, WindowsComponent,
-};
 
-use pathmut::*;
+use pathmut::path::{Component, Path};
+use pathmut::{build_app, get_command, Command, PathKind, Question};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum ParseAs {
     Derive,
     Windows,
     Unix,
+    Url,
 }
 
-fn parse_paths(
-    args: &ArgMatches,
-    normalize: bool,
-    parse_as: ParseAs,
-) -> impl Iterator<Item = TypedPathBuf> + '_ {
+fn parse_paths(args: &ArgMatches, parse_as: ParseAs) -> impl Iterator<Item = Path> + '_ {
     args.get_many::<OsString>("path")
         .expect("required")
-        .map(|path| path.as_encoded_bytes())
+        .map(|path| path.to_string_lossy().to_string())
         .map(move |path| match parse_as {
-            ParseAs::Derive => TypedPath::derive(path),
-            ParseAs::Windows => TypedPath::windows(path),
-            ParseAs::Unix => TypedPath::unix(path),
+            ParseAs::Derive => Path::parse(&path),
+            ParseAs::Windows => Path::parse_as_windows(&path),
+            ParseAs::Unix => Path::parse_as_unix(&path),
+            ParseAs::Url => Path::parse_as_url(&path)
+                .map(|(p, _)| p)
+                .expect("valid url"),
         })
-        .map(move |path| {
-            if normalize {
-                path.normalize()
-            } else {
-                path.to_path_buf()
-            }
-        })
-}
-
-/// Equality between TypedPathBuf that don't use .components(), which
-/// does not yield . and ..
-fn not_normal_path_eq(left: &TypedPathBuf, right: &TypedPathBuf) -> bool {
-    use TypedPathBuf::*;
-    match (left, right) {
-        (Unix(left), Unix(right)) => left.as_bytes() == right.as_bytes(),
-        (Windows(left), Windows(right)) => left.as_bytes() == right.as_bytes(),
-        _ => false,
-    }
 }
 
 fn main() -> ExitCode {
@@ -69,11 +49,12 @@ fn main() -> ExitCode {
 
     let matches = app.get_matches_from(args.clone());
 
-    let normalized_first = *matches.get_one::<bool>("normalize").unwrap();
-    let parse_as = if *matches.get_one::<bool>("as-windows").unwrap() {
+    let parse_as = if *matches.get_one::<bool>("as-windows").unwrap_or(&false) {
         ParseAs::Windows
-    } else if *matches.get_one::<bool>("as-unix").unwrap() {
+    } else if *matches.get_one::<bool>("as-unix").unwrap_or(&false) {
         ParseAs::Unix
+    } else if *matches.get_one::<bool>("as-url").unwrap_or(&false) {
+        ParseAs::Url
     } else {
         ParseAs::Derive
     };
@@ -85,98 +66,96 @@ fn main() -> ExitCode {
     if let Some((cmd, cmd_args)) = matches.subcommand() {
         // check if cmd is a command or component
         if let Ok(cmd) = Command::try_from(cmd) {
-            // if command is is
             match cmd {
                 Command::Depth => {
-                    let paths = parse_paths(cmd_args, normalized_first, parse_as);
-
-                    for path in paths {
-                        println!(
-                            "{}",
-                            path.components()
-                                .filter(|c| {
-                                    if let TypedComponent::Windows(WindowsComponent::Prefix(_)) = c
-                                    {
-                                        return false;
-                                    } else {
-                                        return true;
-                                    }
-                                })
-                                .count()
-                                - 1
-                        );
+                    for path in parse_paths(cmd_args, parse_as) {
+                        println!("{}", path.depth());
                     }
                 }
                 Command::Info => {
-                    let paths = parse_paths(cmd_args, normalized_first, parse_as);
-
-                    for path in paths {
-                        println!("{}", path.to_string_lossy());
+                    for path in parse_paths(cmd_args, parse_as) {
+                        let serialized = path.serialize();
+                        println!("{}", serialized);
                         println!(
                             "      type: {}",
-                            match path {
-                                TypedPathBuf::Unix(_) => "unix",
-                                TypedPathBuf::Windows(_) => "windows",
+                            if path.is_url() {
+                                "url"
+                            } else if path.is_unix() {
+                                "unix"
+                            } else {
+                                "windows"
                             }
                         );
+
+                        // Show file components
                         for (component, name) in [
-                            (Component::Parent, "parent"),
                             (Component::Name, "name"),
-                            (Component::Prefix, "prefix"),
+                            (Component::FilePrefix, "prefix"),
                             (Component::Stem, "stem"),
                             (Component::Extension, "extension"),
                         ] {
-                            println!(
-                                "{name:>10}: {}",
-                                String::from_utf8_lossy(&component.get(&path.to_path())),
-                            );
+                            let value = path.get(component);
+                            if !value.is_empty() {
+                                println!("{name:>10}: {}", value);
+                            }
                         }
 
-                        let mut offset = 0;
-                        for c in path.components() {
-                            let s = match c {
-                                TypedComponent::Unix(comp) => match comp {
-                                    UnixComponent::RootDir => "/",
-                                    UnixComponent::Normal(slice) => &String::from_utf8_lossy(slice),
-                                    _ => todo!(),
-                                },
-                                _ => todo!(),
-                            };
-
-                            let mut padding = String::new();
-                            for _ in 0..offset {
-                                padding.push_str(" ");
+                        // Show URL-specific components if it's a URL
+                        if path.is_url() {
+                            for (component, name) in [
+                                (Component::Scheme, "scheme"),
+                                (Component::Host, "host"),
+                                (Component::Port, "port"),
+                                (Component::Path, "path"),
+                                (Component::Queries, "query"),
+                                (Component::Fragment, "fragment"),
+                            ] {
+                                let value = path.get(component);
+                                if !value.is_empty() {
+                                    println!("{name:>10}: {}", value);
+                                }
                             }
-                            println!("{padding}{s}");
-                            offset += s.len();
-                            if s != "/" {
-                                offset += 1;
+                        }
+
+                        // Show Windows-specific components
+                        if path.is_windows() {
+                            let disk = path.get(Component::Disk);
+                            if !disk.is_empty() {
+                                println!("{:>10}: {}", "disk", disk);
                             }
                         }
                     }
                 }
                 Command::Is => {
-                    let mut paths = parse_paths(cmd_args, normalized_first, parse_as);
+                    let mut paths = parse_paths(cmd_args, parse_as);
 
                     let question = cmd_args.get_one::<Question>("question").expect("required");
                     let all = cmd_args.get_flag("all");
                     let print = cmd_args.get_flag("print");
 
                     let answer = match (question, all) {
-                        (Question::Absolute, true) => paths.all(|path| path.is_absolute()),
-                        (Question::Absolute, false) => paths.any(|path| path.is_absolute()),
-                        (Question::Relative, true) => paths.all(|path| path.is_relative()),
-                        (Question::Relative, false) => paths.any(|path| path.is_relative()),
+                        (Question::Absolute, true) => paths.all(|path| {
+                            path.serialize().starts_with('/')
+                                || path.is_windows() && path.get(Component::Disk).len() > 0
+                        }),
+                        (Question::Absolute, false) => paths.any(|path| {
+                            path.serialize().starts_with('/')
+                                || path.is_windows() && path.get(Component::Disk).len() > 0
+                        }),
+                        (Question::Relative, true) => paths.all(|path| {
+                            !path.serialize().starts_with('/')
+                                && !(path.is_windows() && path.get(Component::Disk).len() > 0)
+                        }),
+                        (Question::Relative, false) => paths.any(|path| {
+                            !path.serialize().starts_with('/')
+                                && !(path.is_windows() && path.get(Component::Disk).len() > 0)
+                        }),
                         (Question::Unix, true) => paths.all(|path| path.is_unix()),
                         (Question::Unix, false) => paths.any(|path| path.is_unix()),
                         (Question::Windows, true) => paths.all(|path| path.is_windows()),
                         (Question::Windows, false) => paths.any(|path| path.is_windows()),
-                        (Question::Normalized, true) => {
-                            paths.all(|path| not_normal_path_eq(&path, &path.normalize()))
-                        }
-                        (Question::Normalized, false) => {
-                            paths.any(|path| not_normal_path_eq(&path, &path.normalize()))
-                        }
+                        (Question::Url, true) => paths.all(|path| path.is_url()),
+                        (Question::Url, false) => paths.any(|path| path.is_url()),
                     };
                     if print {
                         if answer {
@@ -189,7 +168,7 @@ fn main() -> ExitCode {
                     }
                 }
                 Command::Has => {
-                    let mut paths = parse_paths(cmd_args, normalized_first, parse_as);
+                    let mut paths = parse_paths(cmd_args, parse_as);
 
                     let component = cmd_args
                         .get_one::<Component>("component")
@@ -198,9 +177,9 @@ fn main() -> ExitCode {
                     let print = cmd_args.get_flag("print");
 
                     let answer = if all {
-                        paths.all(|path| component.has(&path.to_path()))
+                        paths.all(|path| path.has(*component))
                     } else {
-                        paths.any(|path| component.has(&path.to_path()))
+                        paths.any(|path| path.has(*component))
                     };
 
                     if print {
@@ -213,70 +192,73 @@ fn main() -> ExitCode {
                         return ExitCode::FAILURE;
                     }
                 }
-                Command::Normalize => {
-                    parse_paths(cmd_args, normalized_first, parse_as)
-                        .map(|path| path.normalize())
-                        .for_each(|path| println!("{}", path.to_string_lossy()));
-                }
                 Command::Convert => {
-                    let path_type: PathType =
-                        (*cmd_args.get_one::<PathKind>("type").expect("required")).into();
+                    let path_kind = cmd_args.get_one::<PathKind>("type").expect("required");
 
-                    let paths = parse_paths(cmd_args, normalized_first, parse_as);
-
-                    for path in paths {
-                        let converted = match path_type {
-                            PathType::Unix => path.with_unix_encoding(),
-                            PathType::Windows => path.with_windows_encoding(),
+                    for path in parse_paths(cmd_args, parse_as) {
+                        let converted = match path_kind {
+                            PathKind::Unix => path.to_unix(),
+                            PathKind::Windows => path.to_windows(),
                         };
-                        println!("{}", converted.to_string_lossy());
+                        println!("{}", converted.serialize());
                     }
                 }
-                Command::Get | Command::Delete | Command::Replace | Command::Set => {
+                Command::Get => {
                     let component = cmd_args
                         .get_one::<Component>("component")
                         .expect("required");
 
-                    // This requires manual labor
+                    for path in parse_paths(cmd_args, parse_as) {
+                        println!("{}", path.get(*component));
+                    }
+                }
+                Command::Delete => {
+                    let component = cmd_args
+                        .get_one::<Component>("component")
+                        .expect("required");
 
-                    let action = match cmd {
-                        Command::Get => Action::Get,
-                        Command::Delete => Action::Delete,
-                        Command::Replace => Action::Replace(
-                            cmd_args
-                                .get_one::<OsString>("str")
-                                .expect("required")
-                                .as_encoded_bytes(),
-                        ),
-                        Command::Set => Action::Set(
-                            cmd_args
-                                .get_one::<OsString>("str")
-                                .expect("required")
-                                .as_encoded_bytes(),
-                        ),
-                        _ => unreachable!(),
-                    };
+                    for mut path in parse_paths(cmd_args, parse_as) {
+                        path.delete(*component);
+                        println!("{}", path.serialize());
+                    }
+                }
+                Command::Set => {
+                    let component = cmd_args
+                        .get_one::<Component>("component")
+                        .expect("required");
+                    let value = cmd_args
+                        .get_one::<OsString>("str")
+                        .expect("required")
+                        .to_string_lossy();
 
-                    let results = parse_paths(cmd_args, normalized_first, parse_as)
-                        .map(|path| component.action(&action, &path.to_path()));
+                    for mut path in parse_paths(cmd_args, parse_as) {
+                        path.set(*component, &value);
+                        println!("{}", path.serialize());
+                    }
+                }
+                Command::Replace => {
+                    let component = cmd_args
+                        .get_one::<Component>("component")
+                        .expect("required");
+                    let value = cmd_args
+                        .get_one::<OsString>("str")
+                        .expect("required")
+                        .to_string_lossy();
 
-                    for result in results {
-                        println!("{}", String::from_utf8_lossy(&result));
+                    for mut path in parse_paths(cmd_args, parse_as) {
+                        path.replace(*component, &value);
+                        println!("{}", path.serialize());
                     }
                 }
             }
         } else {
-            // assume subcommand is get
+            // assume subcommand is get (default command)
             let matches = get_command().get_matches_from(args);
 
-            let action = Action::Get;
             let component = matches.get_one::<Component>("component").expect("required");
 
-            let results = parse_paths(&matches, normalized_first, parse_as)
-                .map(|path| component.action(&action, &path.to_path()));
-
-            for result in results {
-                println!("{}", String::from_utf8_lossy(&result));
+            for path in parse_paths(&matches, parse_as) {
+                println!("{}", path.get(*component));
             }
         }
     }
@@ -295,29 +277,14 @@ mod test {
     }
 
     #[test]
-    fn normalize_flag() {
-        pathmut(&["-n", "get", "parent", "/path/to/../file.txt"])
-            .success()
-            .stdout("/path\n");
-        pathmut(&["-n", "replace", "md", "ext", "/path/to/../file.txt"])
-            .success()
-            .stdout("/path/file.md\n");
-        pathmut(&["--normalize", "parent", "/path/to/../file.txt"])
-            .success()
-            .stdout("/path\n");
-        pathmut(&["-n", "convert", "win", "/path/to/../file.txt"])
-            .success()
-            .stdout("\\path\\file.txt\n");
-    }
-
-    #[test]
     fn parse_as_flags() {
-        pathmut(&["-w", "get", "parent", "/path/to/file.txt"])
+        // -x forces unix parsing, -w forces windows
+        pathmut(&["-w", "get", "ext", "/path/to/file.txt"])
             .success()
-            .stdout("/path/to\n");
-        pathmut(&["-u", "get", "parent", "C:\\path\\to\\file.txt"])
+            .stdout("txt\n");
+        pathmut(&["-x", "get", "ext", "C:\\path\\to\\file.txt"])
             .success()
-            .stdout("\n");
+            .stdout("txt\n");
     }
 
     #[test]
@@ -442,14 +409,6 @@ mod test {
             pathmut(&["is", "windows", r"my/path"]).failure();
             pathmut(&["is", "unix", r"my/path"]).success();
         }
-
-        #[test]
-        fn normalized() {
-            pathmut(&["is", "normalized", "/my/path"]).success();
-            pathmut(&["is", "normalized", "/my/./path"]).failure();
-            pathmut(&["is", "normalized", "/my/../path"]).failure();
-            pathmut(&["is", "normalized", "/my//path"]).failure();
-        }
     }
 
     mod default {
@@ -494,17 +453,6 @@ mod test {
         }
 
         #[test]
-        fn parent() {
-            pathmut(&["parent", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path\n");
-            pathmut(&["parent", "/my/path/dir"])
-                .success()
-                .stdout("/my/path\n");
-            pathmut(&["parent", "/"]).success().stdout("\n");
-        }
-
-        #[test]
         fn disk() {
             pathmut(&["disk", "C:\\path\\to\\file.txt"])
                 .success()
@@ -516,30 +464,6 @@ mod test {
                 .success()
                 .stdout("D\n"); // FIXME: this performs capitalization on my behalf, which isn't what I want
             pathmut(&["disk", "/linux/path"]).success().stdout("\n");
-        }
-
-        #[test]
-        fn nth_n1() {
-            // can't use hyphens in subcommands
-            pathmut(&["-1", "/"]).failure();
-        }
-
-        #[test]
-        fn nth_0() {
-            pathmut(&["0", "/"]).success().stdout("/\n");
-            pathmut(&["0", "/my/path/file.txt"]).success().stdout("/\n");
-            pathmut(&["0", "my/path/file.txt"]).success().stdout("my\n");
-        }
-
-        #[test]
-        fn nth_1() {
-            pathmut(&["1", "/"]).success().stdout("\n");
-            pathmut(&["1", "/my/path/file.txt"])
-                .success()
-                .stdout("my\n");
-            pathmut(&["1", "my/path/file.txt"])
-                .success()
-                .stdout("path\n");
         }
     }
 
@@ -577,45 +501,11 @@ mod test {
         }
 
         #[test]
-        fn parent() {
-            pathmut(&["has", "parent", "/my/path/file.txt"]).success();
-            pathmut(&["has", "parent", "/my/path/dir"]).success();
-            pathmut(&["has", "parent", "/my"]).success();
-            pathmut(&["has", "parent", "/"]).failure();
-        }
-
-        #[test]
         fn disk() {
             pathmut(&["has", "disk", "/path/to/file.txt"]).failure();
             pathmut(&["has", "disk", "C:\\path\\to\\file.txt"]).success();
             pathmut(&["has", "disk", "d:\\path\\to\\file.txt"]).success();
             pathmut(&["has", "disk", "\\path\\to\\file.txt"]).failure();
-        }
-
-        #[test]
-        fn nth_n2() {
-            pathmut(&["has", "-2", "/"]).failure();
-            pathmut(&["has", "-2", "/my/path/file.txt"]).success();
-        }
-
-        #[test]
-        fn nth_n1() {
-            pathmut(&["has", "-1", "/"]).success();
-            pathmut(&["has", "-1", "/my/path/file.txt"]).success();
-        }
-
-        #[test]
-        fn nth_0() {
-            pathmut(&["has", "0", "/"]).success();
-            pathmut(&["has", "0", "/my/path/file.txt"]).success();
-            pathmut(&["has", "0", "my/path/file.txt"]).success();
-        }
-
-        #[test]
-        fn nth_1() {
-            pathmut(&["has", "1", "/"]).failure();
-            pathmut(&["has", "1", "/my/path/file.txt"]).success();
-            pathmut(&["has", "1", "my/path/file.txt"]).success();
         }
 
         #[test]
@@ -676,17 +566,6 @@ mod test {
         }
 
         #[test]
-        fn parent() {
-            pathmut(&["get", "parent", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path\n");
-            pathmut(&["get", "parent", "/my/path/dir"])
-                .success()
-                .stdout("/my/path\n");
-            pathmut(&["get", "parent", "/"]).success().stdout("\n");
-        }
-
-        #[test]
         fn disk() {
             pathmut(&["get", "disk", "C:\\path\\to\\file.txt"])
                 .success()
@@ -698,83 +577,6 @@ mod test {
                 .success()
                 .stdout("D\n"); // FIXME: this performs capitalization on my behalf, which isn't what I want
             pathmut(&["get", "disk", "/linux/path"])
-                .success()
-                .stdout("\n");
-        }
-
-        #[test]
-        fn nth_n1() {
-            pathmut(&["get", "-1", "/"]).success().stdout("/\n");
-            pathmut(&["get", "-1", "/my/path/file.txt"])
-                .success()
-                .stdout("file.txt\n");
-            pathmut(&["get", "-1", "my/path/file.txt"])
-                .success()
-                .stdout("file.txt\n");
-            pathmut(&["get", "-1", "my/path/file"])
-                .success()
-                .stdout("file\n");
-        }
-
-        #[test]
-        fn nth_0() {
-            pathmut(&["get", "0", "/"]).success().stdout("/\n");
-            pathmut(&["get", "0", "/my/path/file.txt"])
-                .success()
-                .stdout("/\n");
-            pathmut(&["get", "0", "my/path/file.txt"])
-                .success()
-                .stdout("my\n");
-        }
-
-        #[test]
-        fn nth_1() {
-            pathmut(&["get", "1", "/"]).success().stdout("\n");
-            pathmut(&["get", "1", "/my/path/file.txt"])
-                .success()
-                .stdout("my\n");
-            pathmut(&["get", "1", "my/path/file.txt"])
-                .success()
-                .stdout("path\n");
-        }
-
-        #[test]
-        fn nth_last() {
-            pathmut(&["get", "0", "/"]).success().stdout("/\n");
-            pathmut(&["get", "3", "/my/path/file.txt"])
-                .success()
-                .stdout("file.txt\n");
-            pathmut(&["get", "2", "my/path/file.txt"])
-                .success()
-                .stdout("file.txt\n");
-            pathmut(&["get", "2", "my/path/file"])
-                .success()
-                .stdout("file\n");
-        }
-
-        #[test]
-        fn nth_outside() {
-            // index == 1 more than num components
-            pathmut(&["get", "1", "/"]).success().stdout("\n");
-            pathmut(&["get", "4", "/my/path/file.txt"])
-                .success()
-                .stdout("\n");
-            pathmut(&["get", "3", "my/path/file.txt"])
-                .success()
-                .stdout("\n");
-            pathmut(&["get", "3", "my/path/file"])
-                .success()
-                .stdout("\n");
-
-            // index == - num components
-            pathmut(&["get", "-2", "/"]).success().stdout("\n");
-            pathmut(&["get", "-5", "/my/path/file.txt"])
-                .success()
-                .stdout("\n");
-            pathmut(&["get", "-4", "my/path/file.txt"])
-                .success()
-                .stdout("\n");
-            pathmut(&["get", "-4", "my/path/file"])
                 .success()
                 .stdout("\n");
         }
@@ -806,10 +608,10 @@ mod test {
         fn prefix() {
             pathmut(&["delete", "prefix", "/my/path/file.tar.gz"])
                 .success()
-                .stdout("/my/path/tar.gz\n");
+                .stdout("/my/path/.tar.gz\n");
             pathmut(&["delete", "prefix", "/my/path/file"])
                 .success()
-                .stdout("/my/path\n");
+                .stdout("/my/path/\n");
             pathmut(&["delete", "prefix", "/my"])
                 .success()
                 .stdout("/\n");
@@ -821,19 +623,6 @@ mod test {
             pathmut(&["delete", "name", "/my/path/file.txt"])
                 .success()
                 .stdout("/my/path\n");
-        }
-
-        #[test]
-        fn parent() {
-            pathmut(&["delete", "parent", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("file.tar.gz\n");
-            pathmut(&["delete", "parent", "/my/path"])
-                .success()
-                .stdout("path\n");
-            pathmut(&["delete", "parent", "/my/path/"])
-                .success()
-                .stdout("path\n");
         }
 
         #[test]
@@ -850,30 +639,6 @@ mod test {
             pathmut(&["delete", "disk", "\\path\\to\\file.txt"])
                 .success()
                 .stdout("\\path\\to\\file.txt\n");
-        }
-
-        #[test]
-        fn nth_n1() {
-            pathmut(&["delete", "-1", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path\n");
-            pathmut(&["delete", "-1", "my/path/file.txt"])
-                .success()
-                .stdout("my/path\n");
-            pathmut(&["delete", "-1", "file.txt"])
-                .success()
-                .stdout("\n");
-        }
-
-        #[test]
-        fn nth_0() {
-            pathmut(&["delete", "0", "/my/path/file.txt"])
-                .success()
-                .stdout("my/path/file.txt\n");
-            pathmut(&["delete", "0", "my/path/file.txt"])
-                .success()
-                .stdout("path/file.txt\n");
-            pathmut(&["delete", "0", "file.txt"]).success().stdout("\n");
         }
     }
 
@@ -897,7 +662,7 @@ mod test {
         fn stem() {
             pathmut(&["replace", "main", "stem", "/my/path/file"])
                 .success()
-                .stdout("/my/path/main\n");
+                .stdout("/my/path/main.file\n");
             pathmut(&["replace", "main", "stem", "/my/path/file.txt"])
                 .success()
                 .stdout("/my/path/main.txt\n");
@@ -910,7 +675,7 @@ mod test {
         fn prefix() {
             pathmut(&["replace", "main", "prefix", "/my/path/file"])
                 .success()
-                .stdout("/my/path/main\n");
+                .stdout("/my/path/main.file\n");
             pathmut(&["replace", "main", "prefix", "/my/path/file.txt"])
                 .success()
                 .stdout("/my/path/main.txt\n");
@@ -933,19 +698,6 @@ mod test {
         }
 
         #[test]
-        fn parent() {
-            pathmut(&["replace", "new/dir", "parent", "/my/path/file.txt"])
-                .success()
-                .stdout("new/dir/file.txt\n");
-            pathmut(&["replace", "/", "parent", "my/path/file.txt"])
-                .success()
-                .stdout("/file.txt\n");
-            pathmut(&["replace", "new", "parent", "/my/path"])
-                .success()
-                .stdout("new/path\n");
-        }
-
-        #[test]
         fn disk() {
             pathmut(&["replace", "C", "disk", "/path/to/file.txt"])
                 .success()
@@ -959,44 +711,6 @@ mod test {
             pathmut(&["replace", "C", "disk", "\\path\\to\\file.txt"])
                 .success()
                 .stdout("\\path\\to\\file.txt\n");
-        }
-
-        #[test]
-        fn nth_n1() {
-            pathmut(&["replace", "new/dir", "-1", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/new/dir\n");
-
-            // replacing a later component with root makes it root
-            pathmut(&["replace", "/", "-1", "my/path/file.txt"])
-                .success()
-                .stdout("/\n");
-        }
-
-        #[test]
-        fn nth_0() {
-            pathmut(&["replace", "new/dir", "0", "/my/path/file.txt"])
-                .success()
-                .stdout("new/dir/my/path/file.txt\n");
-            pathmut(&["replace", "new/dir", "0", "my/path/file.txt"])
-                .success()
-                .stdout("new/dir/path/file.txt\n");
-            pathmut(&["replace", "/", "0", "my/path/file.txt"])
-                .success()
-                .stdout("/path/file.txt\n");
-        }
-
-        #[test]
-        fn nth_1() {
-            pathmut(&["replace", "new/dir", "1", "/my/path/file.txt"])
-                .success()
-                .stdout("/new/dir/path/file.txt\n");
-            pathmut(&["replace", "new/dir", "1", "my/path/file.txt"])
-                .success()
-                .stdout("my/new/dir/file.txt\n");
-            pathmut(&["replace", "/", "1", "my/path/file.txt"])
-                .success()
-                .stdout("/file.txt\n");
         }
     }
 
@@ -1050,22 +764,6 @@ mod test {
         }
 
         #[test]
-        fn parent() {
-            pathmut(&["set", "new/dir", "parent", "/my/path/file.txt"])
-                .success()
-                .stdout("new/dir/file.txt\n");
-            pathmut(&["set", "/", "parent", "my/path/file.txt"])
-                .success()
-                .stdout("/file.txt\n");
-            pathmut(&["set", "new", "parent", "/my/path"])
-                .success()
-                .stdout("new/path\n");
-            pathmut(&["set", "new", "parent", "file.txt"])
-                .success()
-                .stdout("new/file.txt\n");
-        }
-
-        #[test]
         fn disk() {
             pathmut(&["set", "C", "disk", "/path/to/file.txt"])
                 .success()
@@ -1080,94 +778,6 @@ mod test {
                 .success()
                 .stdout("C:\\path\\to\\file.txt\n");
         }
-
-        #[test]
-        fn nth_n1() {
-            pathmut(&["set", "new/dir", "-1", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/new/dir\n");
-            pathmut(&["set", "new/dir", "-1", "/my/path/file"])
-                .success()
-                .stdout("/my/path/new/dir\n");
-            pathmut(&["set", "/", "-1", "my/path/file.txt"])
-                .success()
-                .stdout("/\n");
-        }
-
-        #[test]
-        fn nth_0() {
-            pathmut(&["set", "new/dir", "0", "/my/path/file.txt"])
-                .success()
-                .stdout("new/dir/my/path/file.txt\n");
-            pathmut(&["set", "new/dir", "0", "my/path/file.txt"])
-                .success()
-                .stdout("new/dir/path/file.txt\n");
-            pathmut(&["set", "/", "0", "my/path/file.txt"])
-                .success()
-                .stdout("/path/file.txt\n");
-        }
-
-        #[test]
-        fn nth_1() {
-            pathmut(&["set", "new/dir", "1", "/my/path/file.txt"])
-                .success()
-                .stdout("/new/dir/path/file.txt\n");
-            pathmut(&["set", "new/dir", "1", "my/path/file.txt"])
-                .success()
-                .stdout("my/new/dir/file.txt\n");
-        }
-
-        #[test]
-        fn root() {
-            pathmut(&["set", "/", "0", "my/path/file.txt"])
-                .success()
-                .stdout("/path/file.txt\n");
-            pathmut(&["set", "/", "1", "my/path/file.txt"])
-                .success()
-                .stdout("/file.txt\n");
-            pathmut(&["set", "/", "2", "my/path/file.txt"])
-                .success()
-                .stdout("/\n");
-
-            // TODO: should this error or not?
-            // this is two things: setting any thing >= num components to root is root
-            // setting something at num_components feels like "insertion"
-            pathmut(&["set", "/", "3", "my/path/file.txt"])
-                .success()
-                .stdout("/\n");
-        }
-    }
-
-    #[test]
-    fn normalize() {
-        pathmut(&["normalize", "my/path/file.txt"])
-            .success()
-            .stdout("my/path/file.txt\n");
-        pathmut(&["normalize", r"C:\my\path\file.txt"])
-            .success()
-            .stdout("C:\\my\\path\\file.txt\n");
-        pathmut(&["normalize", "my/path/.."])
-            .success()
-            .stdout("my\n");
-        pathmut(&["normalize", r"C:\my\path\.."])
-            .success()
-            .stdout("C:\\my\n");
-        pathmut(&["normalize", "my/./path"])
-            .success()
-            .stdout("my/path\n");
-        pathmut(&["normalize", r"C:\my\.\path"])
-            .success()
-            .stdout("C:\\my\\path\n");
-    }
-
-    #[test]
-    fn normalize_not_default() {
-        pathmut(&["get", "parent", "my/path/./dir/file.txt"])
-            .success()
-            .stdout("my/path/./dir\n");
-        pathmut(&["get", "parent", "my/path/../file.txt"])
-            .success()
-            .stdout("my/path/..\n");
     }
 
     #[test]

@@ -1,6 +1,5 @@
 use clap::builder::PossibleValue;
 use clap::ValueEnum;
-use typed_path::PathType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
@@ -10,7 +9,6 @@ pub enum Command {
     Delete,
     Has,
     Is,
-    Normalize,
     Convert,
     Info,
     Depth,
@@ -28,7 +26,6 @@ impl TryFrom<&str> for Command {
             "delete" => Delete,
             "has" => Has,
             "is" => Is,
-            "normalize" => Normalize,
             "convert" => Convert,
             "info" => Info,
             "depth" => Depth,
@@ -38,7 +35,6 @@ impl TryFrom<&str> for Command {
     }
 }
 
-// is this necessary?
 impl ValueEnum for Command {
     fn value_variants<'a>() -> &'a [Self] {
         &[
@@ -48,9 +44,8 @@ impl ValueEnum for Command {
             Command::Delete,
             Command::Has,
             Command::Is,
-            Command::Normalize,
             Command::Convert,
-            //Command::Info,
+            Command::Info,
             Command::Depth,
         ]
     }
@@ -64,7 +59,6 @@ impl ValueEnum for Command {
             Delete => "delete",
             Has => "has",
             Is => "is",
-            Normalize => "normalize",
             Convert => "convert",
             Info => "info",
             Depth => "depth",
@@ -79,7 +73,7 @@ pub enum Question {
     Relative,
     Unix,
     Windows,
-    Normalized,
+    Url,
 }
 
 impl ValueEnum for Question {
@@ -89,7 +83,7 @@ impl ValueEnum for Question {
             Question::Relative,
             Question::Unix,
             Question::Windows,
-            Question::Normalized,
+            Question::Url,
         ]
     }
 
@@ -100,7 +94,7 @@ impl ValueEnum for Question {
             Relative => "relative",
             Unix => "unix",
             Windows => "windows",
-            Normalized => "normalized",
+            Url => "url",
         };
         Some(PossibleValue::new(s))
     }
@@ -110,15 +104,6 @@ impl ValueEnum for Question {
 pub enum PathKind {
     Unix,
     Windows,
-}
-
-impl From<PathKind> for PathType {
-    fn from(val: PathKind) -> Self {
-        match val {
-            PathKind::Unix => PathType::Unix,
-            PathKind::Windows => PathType::Windows,
-        }
-    }
 }
 
 impl ValueEnum for PathKind {

@@ -3,13 +3,13 @@ use clap::{crate_version, value_parser, Arg, ArgAction, Command};
 
 use crate::command::PathKind;
 use crate::command::Question;
-use crate::component::arg_into_component;
+use crate::path::Component;
 
 pub fn build() -> Command {
     Command::new("pathmut")
         .version(crate_version!())
         .about("Mutate path strings")
-        .args([normalize_arg(), parse_as_unix_arg(), parse_as_win_arg()])
+        .args([parse_as_unix_arg(), parse_as_win_arg(), parse_as_url_arg()])
         .subcommands([
             get_command(),
             remove_command(),
@@ -17,7 +17,6 @@ pub fn build() -> Command {
             set_command(),
             has_command(),
             is_command(),
-            normalize_command(),
             convert_command(),
             info_command(),
             depth_command(),
@@ -29,44 +28,55 @@ pub fn build() -> Command {
         .after_help(components_help_section())
 }
 
-fn normalize_arg() -> Arg {
-    Arg::new("normalize")
-        .global(true)
-        .short('n')
-        .long("normalize")
-        .action(ArgAction::SetTrue)
-        .help("Normalize the path first")
-}
-
 fn parse_as_win_arg() -> Arg {
     Arg::new("as-windows")
         .global(true)
         .short('w')
         .long("as-windows")
         .action(ArgAction::SetTrue)
-        .conflicts_with("as-unix")
+        .conflicts_with_all(["as-unix", "as-url"])
         .help("Parse paths as windows paths")
 }
 
 fn parse_as_unix_arg() -> Arg {
     Arg::new("as-unix")
         .global(true)
-        .short('u')
+        .short('x')
         .long("as-unix")
         .action(ArgAction::SetTrue)
-        .conflicts_with("as-windows")
+        .conflicts_with_all(["as-windows", "as-url"])
         .help("Parse paths as unix paths")
 }
 
+fn parse_as_url_arg() -> Arg {
+    Arg::new("as-url")
+        .global(true)
+        .short('u')
+        .long("as-url")
+        .action(ArgAction::SetTrue)
+        .conflicts_with_all(["as-windows", "as-unix"])
+        .help("Parse paths as URLs")
+}
+
 fn components_help_section() -> &'static str {
-    "\x1B[4;1mComponents:\x1B[0m\n\
-    \x20 \x1B[1mext\x1B[0m      File extension\n\
-    \x20 \x1B[1mstem\x1B[0m     File stem\n\
-    \x20 \x1B[1mprefix\x1B[0m   File prefix\n\
-    \x20 \x1B[1mname\x1B[0m     File name\n\
-    \x20 \x1B[1mparent\x1B[0m   Parent of the file or directory\n\
-    \x20 \x1B[1mdisk\x1B[0m     Disk of a windows path\n\
-    \x20 \x1B[1;3mn\x1B[0m        Ordinal of the nth component\n"
+    "\x1B[4;1mFile Components:\x1B[0m\n\
+    \x20 \x1B[1mext\x1B[0m       File extension\n\
+    \x20 \x1B[1mstem\x1B[0m      File stem\n\
+    \x20 \x1B[1mprefix\x1B[0m    File prefix (before first dot)\n\
+    \x20 \x1B[1mname\x1B[0m      File name\n\
+    \x20 \x1B[1mdisk\x1B[0m      Disk of a windows path\n\
+    \x20 \x1B[1mwinprefix\x1B[0m Windows path prefix\n\n\
+    \x1B[4;1mURL Components:\x1B[0m\n\
+    \x20 \x1B[1mscheme\x1B[0m    URL scheme (http, https, etc.)\n\
+    \x20 \x1B[1mhost\x1B[0m      Hostname\n\
+    \x20 \x1B[1mport\x1B[0m      Port number\n\
+    \x20 \x1B[1mpath\x1B[0m      URL path\n\
+    \x20 \x1B[1mquery\x1B[0m     Query string\n\
+    \x20 \x1B[1mfrag\x1B[0m      Fragment identifier\n\
+    \x20 \x1B[1muser\x1B[0m      Username\n\
+    \x20 \x1B[1mpass\x1B[0m      Password\n\
+    \x20 \x1B[1morigin\x1B[0m    scheme://host:port\n\
+    \x20 \x1B[1mtld\x1B[0m       Top-level domain\n"
 }
 
 fn questions_help_section() -> &'static str {
@@ -75,16 +85,13 @@ fn questions_help_section() -> &'static str {
     \x20 \x1B[1mrelative\x1B[0m\n\
     \x20 \x1B[1munix\x1B[0m\n\
     \x20 \x1B[1mwindows\x1B[0m\n\
-    \x20 \x1B[1mnormalized\x1B[0m\n"
+    \x20 \x1B[1murl\x1B[0m\n"
 }
 
 fn component_arg() -> Arg {
-    // todo: figure out way to list possible values
     Arg::new("component")
         .required(true)
-        .value_parser(arg_into_component)
-        .allow_negative_numbers(true)
-        //.value_parser(value_parser!(Component))
+        .value_parser(|s: &str| Component::try_from(s))
         .help("Path component")
 }
 
@@ -108,7 +115,7 @@ pub fn get_command() -> Command {
     Command::new("get")
         .about("Read a path component [default]")
         .arg_required_else_help(true)
-        .args([normalize_arg(), component_arg(), paths_arg()])
+        .args([component_arg(), paths_arg()])
         .after_help(components_help_section())
 }
 
@@ -178,13 +185,6 @@ fn is_command() -> Command {
         .args(true_false_args())
         .args([question_arg(), paths_arg()])
         .after_help(questions_help_section())
-}
-
-fn normalize_command() -> Command {
-    Command::new("normalize")
-        .about("Normalize a file path")
-        .arg_required_else_help(true)
-        .arg(paths_arg())
 }
 
 fn path_type_arg() -> Arg {
