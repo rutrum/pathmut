@@ -104,17 +104,19 @@ impl ValueEnum for Question {
 pub enum PathKind {
     Unix,
     Windows,
+    Url,
 }
 
 impl ValueEnum for PathKind {
     fn value_variants<'a>() -> &'a [Self] {
-        &[PathKind::Unix, PathKind::Windows]
+        &[PathKind::Unix, PathKind::Windows, PathKind::Url]
     }
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
         let s = match self {
             Self::Unix => "unix",
             Self::Windows => "win",
+            Self::Url => "url",
         };
         Some(PossibleValue::new(s))
     }

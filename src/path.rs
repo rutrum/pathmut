@@ -200,12 +200,13 @@ impl Path {
         matches!(self.kind, PathKind::Url { .. })
     }
 
-    /// Convert this path to Unix format, preserving segments
+    /// Convert this path to Unix format, preserving segments.
+    /// When converting from URL, assumes root (since URLs have absolute paths).
     pub fn to_unix(&self) -> Path {
         let root = match &self.kind {
             PathKind::Unix { root } => *root,
             PathKind::Windows { root, .. } => *root,
-            PathKind::Url { .. } => false,
+            PathKind::Url { .. } => true,
         };
         Path {
             segments: self.segments.clone(),
@@ -213,16 +214,34 @@ impl Path {
         }
     }
 
-    /// Convert this path to Windows format, preserving segments
+    /// Convert this path to Windows format, preserving segments.
+    /// When converting from URL, assumes root (since URLs have absolute paths).
     pub fn to_windows(&self) -> Path {
         let (root, prefix) = match &self.kind {
             PathKind::Unix { root } => (*root, None),
             PathKind::Windows { root, prefix } => (*root, prefix.clone()),
-            PathKind::Url { .. } => (false, None),
+            PathKind::Url { .. } => (true, None),
         };
         Path {
             segments: self.segments.clone(),
             kind: PathKind::Windows { root, prefix },
+        }
+    }
+
+    /// Convert this path to URL format, preserving segments.
+    /// Uses https scheme by default. Only keeps segment information.
+    pub fn to_url(&self) -> Path {
+        Path {
+            segments: self.segments.clone(),
+            kind: PathKind::Url {
+                scheme: Some("https".to_string()),
+                username: None,
+                password: None,
+                host: HostKind::Domain(vec![]),
+                port: None,
+                query_params: vec![],
+                fragment: None,
+            },
         }
     }
 

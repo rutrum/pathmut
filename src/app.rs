@@ -67,7 +67,7 @@ fn components_help_section() -> &'static str {
     \x20 \x1B[1mdisk\x1B[0m      Disk of a windows path\n\
     \x20 \x1B[1mwinprefix\x1B[0m Windows path prefix\n\n\
     \x1B[4;1mURL Components:\x1B[0m\n\
-    \x20 \x1B[1mscheme\x1B[0m    URL scheme (http, https, etc.)\n\
+    \x20 \x1B[1mscheme\x1B[0m    URL scheme\n\
     \x20 \x1B[1mhost\x1B[0m      Hostname\n\
     \x20 \x1B[1mport\x1B[0m      Port number\n\
     \x20 \x1B[1mpath\x1B[0m      URL path\n\

@@ -255,6 +255,7 @@ fn main() -> ExitCode {
                         let converted = match path_kind {
                             PathKind::Unix => path.to_unix(),
                             PathKind::Windows => path.to_windows(),
+                            PathKind::Url => path.to_url(),
                         };
                         println!("{}", converted.serialize());
                     }
