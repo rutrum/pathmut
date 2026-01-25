@@ -385,77 +385,77 @@ mod test {
     }
 
     // =========================================================================
-    // Set/Replace test - showing behavioral difference
+    // Set test - also verifies replace behavior automatically
+    // Replace should equal set when `has` is true, otherwise no-op
     // =========================================================================
     #[rstest]
-    // Extension - exists (both work the same)
-    #[case("set", "ext", "/path/file.txt", "NEW", "/path/file.NEW")]
-    #[case("replace", "ext", "/path/file.txt", "NEW", "/path/file.NEW")]
-    #[case("set", "ext", "/path/file.tar.gz", "NEW", "/path/file.tar.NEW")]
-    #[case("replace", "ext", "/path/file.tar.gz", "NEW", "/path/file.tar.NEW")]
-    // Extension - missing (key difference: set creates, replace doesn't)
-    #[case("set", "ext", "/path/file", "NEW", "/path/file.NEW")]
-    #[case("replace", "ext", "/path/file", "NEW", "/path/file")]
+    // Extension
+    #[case("ext", "/path/file.txt", "NEW", "/path/file.NEW")]
+    #[case("ext", "/path/file.tar.gz", "NEW", "/path/file.tar.NEW")]
+    #[case("ext", "/path/file", "NEW", "/path/file.NEW")]
     // Stem
-    #[case("set", "stem", "/path/file.txt", "NEW", "/path/NEW.txt")]
-    #[case("replace", "stem", "/path/file.txt", "NEW", "/path/NEW.txt")]
-    #[case("set", "stem", "/path/file.tar.gz", "NEW", "/path/NEW.gz")]
-    #[case("replace", "stem", "/path/file.tar.gz", "NEW", "/path/NEW.gz")]
+    #[case("stem", "/path/file.txt", "NEW", "/path/NEW.txt")]
+    #[case("stem", "/path/file.tar.gz", "NEW", "/path/NEW.gz")]
     // Prefix
-    #[case("set", "prefix", "/path/file.txt", "NEW", "/path/NEW.txt")]
-    #[case("replace", "prefix", "/path/file.txt", "NEW", "/path/NEW.txt")]
-    #[case("set", "prefix", "/path/file.tar.gz", "NEW", "/path/NEW.tar.gz")]
-    #[case("replace", "prefix", "/path/file.tar.gz", "NEW", "/path/NEW.tar.gz")]
+    #[case("prefix", "/path/file.txt", "NEW", "/path/NEW.txt")]
+    #[case("prefix", "/path/file.tar.gz", "NEW", "/path/NEW.tar.gz")]
     // Name
-    #[case("set", "name", "/path/file.txt", "NEW", "/path/NEW")]
-    #[case("replace", "name", "/path/file.txt", "NEW", "/path/NEW")]
-    #[case("set", "name", "/my/path/", "NEW", "/my/NEW")]
-    #[case("replace", "name", "/my/path/", "NEW", "/my/NEW")]
-    #[case("set", "name", "/my/path", "NEW", "/my/NEW")]
-    #[case("replace", "name", "/my/path", "NEW", "/my/NEW")]
-    // Disk - on Unix (no disk exists, no-op)
-    #[case("set", "disk", "/path/file.txt", "C", "/path/file.txt")]
-    #[case("replace", "disk", "/path/file.txt", "C", "/path/file.txt")]
-    // Disk - on Windows
-    #[case("set", "disk", r"C:\path\file.txt", "D", r"D:\path\file.txt")]
-    #[case("replace", "disk", r"C:\path\file.txt", "D", r"D:\path\file.txt")]
-    #[case("set", "disk", r"C:\path\file.txt", "d", r"d:\path\file.txt")]
-    #[case("replace", "disk", r"C:\path\file.txt", "d", r"d:\path\file.txt")]
-    #[case("set", "disk", r"\path\file.txt", "C", r"C:\path\file.txt")]
-    #[case("replace", "disk", r"\path\file.txt", "C", r"\path\file.txt")]
+    #[case("name", "/path/file.txt", "NEW", "/path/NEW")]
+    #[case("name", "/my/path/", "NEW", "/my/NEW")]
+    #[case("name", "/my/path", "NEW", "/my/NEW")]
+    // Disk - Unix (no disk exists)
+    #[case("disk", "/path/file.txt", "C", "/path/file.txt")]
+    // Disk - Windows
+    #[case("disk", r"C:\path\file.txt", "D", r"D:\path\file.txt")]
+    #[case("disk", r"C:\path\file.txt", "d", r"d:\path\file.txt")]
+    #[case("disk", r"\path\file.txt", "C", r"C:\path\file.txt")]
     // URL components
-    #[case("set", "scheme", "https://example.com", "ftp", "ftp://example.com")]
+    #[case("scheme", "https://example.com", "ftp", "ftp://example.com")]
     #[case(
-        "set",
         "port",
         "https://example.com/path",
         "8080",
         "https://example.com:8080/path"
     )]
     #[case(
-        "set",
         "frag",
         "https://example.com/path",
         "top",
         "https://example.com/path#top"
     )]
     #[case(
-        "set",
         "query",
         "https://example.com/path",
         "a=b",
         "https://example.com/path?a=b"
     )]
-    fn test_set_replace(
-        #[case] cmd: &str,
+    fn test_set(
         #[case] component: &str,
         #[case] path: &str,
         #[case] value: &str,
         #[case] expected: &str,
     ) {
-        pathmut(&[cmd, value, component, path])
+        // Test set
+        pathmut(&["set", value, component, path])
             .success()
             .stdout(format!("{expected}\n"));
+
+        // Test replace: if has returns success, replace should equal set; otherwise no-op
+        let has_result = pathmut(&["has", component, path]);
+        let replace_out = pathmut_stdout(&["replace", value, component, path]);
+        if has_result.try_success().is_ok() {
+            assert_eq!(
+                replace_out,
+                format!("{expected}\n"),
+                "replace should equal set when component exists"
+            );
+        } else {
+            assert_eq!(
+                replace_out,
+                format!("{path}\n"),
+                "replace should be no-op when component doesn't exist"
+            );
+        }
     }
 
     // =========================================================================
@@ -640,7 +640,7 @@ mod test {
     fn test_help_default() {
         pathmut(&[])
             .failure()
-            .stderr(predicate::str::contains("Print help information"));
+            .stderr(predicate::str::contains("Print help"));
     }
 
     #[test]
