@@ -11,32 +11,43 @@ Mutate path strings
 Usage: pathmut [OPTIONS] [COMMAND or COMPONENT]
 
 Commands:
-  get        Read a path component [default]
-  delete     Remove a path component
-  replace    Replace an existing path component
-  set        Set a path component
-  has        Check if a path component exists
-  is         Ask questions about a file path
-  normalize  Normalize a file path
-  convert    Convert between unix and windows paths
-  depth      Number of components before the last component.
-  help       Print this message or the help of the given subcommand(s)
+  get      Read a path component [default]
+  delete   Remove a path component
+  replace  Replace an existing path component
+  set      Set a path component
+  has      Check if a path component exists
+  is       Ask questions about a file path
+  convert  Convert between unix and windows paths
+  info     Print information about paths
+  depth    Number of components before the last component.
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
-  -n, --normalize   Normalize the path first
-  -u, --as-unix     Parse paths as unix paths
+  -x, --as-unix     Parse paths as unix paths
   -w, --as-windows  Parse paths as windows paths
-  -h, --help        Print help information
-  -V, --version     Print version information
+  -u, --as-url      Parse paths as URLs
+  -h, --help        Print help
+  -V, --version     Print version
 
-Components:
-  ext      File extension
-  stem     File stem
-  prefix   File prefix
-  name     File name
-  parent   Parent of the file or directory
-  disk     Disk of a windows path
-  n        Ordinal of the nth component
+File Components:
+  ext       File extension
+  stem      File stem
+  prefix    File prefix (before first dot)
+  name      File name
+  disk      Disk of a windows path
+  winprefix Windows path prefix
+
+URL Components:
+  scheme    URL scheme (http, https, etc.)
+  host      Hostname
+  port      Port number
+  path      URL path
+  query     Query string
+  frag      Fragment identifier
+  user      Username
+  pass      Password
+  origin    scheme://host:port
+  tld       Top-level domaint
 ```
 
 ## Installation
@@ -66,7 +77,9 @@ I should be able to work with multiple paths:
 * Is path B contained with path A?
 * Join path A and path B together.
 
-Why stop at paths?  A command line utility built to mutate URIs like "scheme://user:pass@sub.domain.com/route?query=param#anchor" would have an almost identical API, and would even overlap with some path functionality.  In the future, this library will expand to include URIs as well.
+Currently theres baked-in redundancy removal within the parser, such as `././/.//` is just parsed as `./`.  I want this to be opt-in behavior.
+
+There's also default detection between windows and unix that I think could be improved.
 
 ## Changelog
 
