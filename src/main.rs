@@ -271,13 +271,296 @@ mod test {
     use assert_cmd::assert::Assert;
     use assert_cmd::Command;
     use predicates::prelude::*;
+    use rstest::rstest;
 
     fn pathmut(args: &[&str]) -> Assert {
         Command::cargo_bin("pathmut").unwrap().args(args).assert()
     }
 
+    fn pathmut_stdout(args: &[&str]) -> String {
+        let output = Command::cargo_bin("pathmut")
+            .unwrap()
+            .args(args)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+    // =========================================================================
+    // Combined get/has test - verifies get output AND has correctness
+    // =========================================================================
+    #[rstest]
+    // Unix paths - with extension
+    #[case("ext", "/my/path/file.txt", "txt")]
+    #[case("stem", "/my/path/file.txt", "file")]
+    #[case("prefix", "/my/path/file.txt", "file")]
+    #[case("name", "/my/path/file.txt", "file.txt")]
+    #[case("disk", "/my/path/file.txt", "")]
+    // Unix paths - multiple extensions
+    #[case("ext", "/my/path/file.tar.gz", "gz")]
+    #[case("stem", "/my/path/file.tar.gz", "file.tar")]
+    #[case("prefix", "/my/path/file.tar.gz", "file")]
+    #[case("name", "/my/path/file.tar.gz", "file.tar.gz")]
+    // Unix paths - no extension
+    #[case("ext", "/my/path/file", "")]
+    #[case("stem", "/my/path/file", "file")]
+    #[case("prefix", "/my/path/file", "file")]
+    #[case("name", "/my/path/file", "file")]
+    // Unix root path
+    #[case("ext", "/", "")]
+    #[case("stem", "/", "")]
+    #[case("prefix", "/", "")]
+    #[case("name", "/", "")]
+    // Windows paths
+    #[case("ext", r"C:\path\to\file.txt", "txt")]
+    #[case("stem", r"C:\path\to\file.txt", "file")]
+    #[case("name", r"C:\path\to\file.txt", "file.txt")]
+    #[case("disk", r"C:\path\to\file.txt", "C")]
+    #[case("disk", r"d:\path\to\file.txt", "D")]
+    #[case("disk", r"\path\to\file.txt", "")]
+    // URLs - file components
+    #[case("ext", "https://example.com/path/file.txt", "txt")]
+    #[case("stem", "https://example.com/path/file.txt", "file")]
+    #[case("name", "https://example.com/path/file.txt", "file.txt")]
+    // URLs - url-specific components
+    #[case("scheme", "https://example.com/path", "https")]
+    #[case("host", "https://example.com/path", "example.com")]
+    #[case("port", "https://example.com/path", "")]
+    #[case("port", "https://example.com:8080/path", "8080")]
+    #[case("query", "https://example.com?foo=bar", "?foo=bar")]
+    #[case("query", "https://example.com/path", "")]
+    #[case("frag", "https://example.com#section", "section")]
+    #[case("frag", "https://example.com/path", "")]
+    // URLs - auth components
+    #[case("user", "https://user:pass@example.com", "user")]
+    #[case("pass", "https://user:pass@example.com", "pass")]
+    #[case("user", "https://example.com", "")]
+    #[case("pass", "https://example.com", "")]
+    fn test_get_has(#[case] component: &str, #[case] path: &str, #[case] expected: &str) {
+        // Test get
+        pathmut(&["get", component, path])
+            .success()
+            .stdout(format!("{expected}\n"));
+
+        // Test has - should succeed iff expected is non-empty
+        let has_result = pathmut(&["has", component, path]);
+        if expected.is_empty() {
+            has_result.failure();
+        } else {
+            has_result.success();
+        }
+    }
+
+    // =========================================================================
+    // Delete test
+    // =========================================================================
+    #[rstest]
+    // Unix paths
+    #[case("ext", "/my/path/file.txt", "/my/path/file")]
+    #[case("stem", "/my/path/file.txt", "/my/path/txt")]
+    #[case("stem", "/my/path/file.tar.gz", "/my/path/gz")]
+    #[case("prefix", "/my/path/file.tar.gz", "/my/path/.tar.gz")]
+    #[case("prefix", "/my/path/file", "/my/path/")]
+    #[case("prefix", "/my", "/")]
+    #[case("prefix", "/", "/")]
+    #[case("name", "/my/path/file.txt", "/my/path")]
+    // Windows paths
+    #[case("ext", r"C:\path\to\file.txt", r"C:\path\to\file")]
+    #[case("disk", r"C:\path\to\file.txt", r"\path\to\file.txt")]
+    #[case("disk", r"d:\path\to\file.txt", r"\path\to\file.txt")]
+    #[case("disk", r"\path\to\file.txt", r"\path\to\file.txt")]
+    #[case("disk", "/path/to/file.txt", "/path/to/file.txt")]
+    // URLs
+    #[case(
+        "query",
+        "https://example.com/path?foo=bar",
+        "https://example.com/path"
+    )]
+    #[case("frag", "https://example.com/path#section", "https://example.com/path")]
+    #[case("port", "https://example.com:8080/path", "https://example.com/path")]
+    fn test_delete(#[case] component: &str, #[case] path: &str, #[case] expected: &str) {
+        pathmut(&["delete", component, path])
+            .success()
+            .stdout(format!("{expected}\n"));
+    }
+
+    // =========================================================================
+    // Set/Replace test - showing behavioral difference
+    // =========================================================================
+    #[rstest]
+    // Extension - exists (both work the same)
+    #[case("set", "ext", "/path/file.txt", "NEW", "/path/file.NEW")]
+    #[case("replace", "ext", "/path/file.txt", "NEW", "/path/file.NEW")]
+    #[case("set", "ext", "/path/file.tar.gz", "NEW", "/path/file.tar.NEW")]
+    #[case("replace", "ext", "/path/file.tar.gz", "NEW", "/path/file.tar.NEW")]
+    // Extension - missing (key difference: set creates, replace doesn't)
+    #[case("set", "ext", "/path/file", "NEW", "/path/file.NEW")]
+    #[case("replace", "ext", "/path/file", "NEW", "/path/file")]
+    // Stem
+    #[case("set", "stem", "/path/file.txt", "NEW", "/path/NEW.txt")]
+    #[case("replace", "stem", "/path/file.txt", "NEW", "/path/NEW.txt")]
+    #[case("set", "stem", "/path/file.tar.gz", "NEW", "/path/NEW.gz")]
+    #[case("replace", "stem", "/path/file.tar.gz", "NEW", "/path/NEW.gz")]
+    // Prefix
+    #[case("set", "prefix", "/path/file.txt", "NEW", "/path/NEW.txt")]
+    #[case("replace", "prefix", "/path/file.txt", "NEW", "/path/NEW.txt")]
+    #[case("set", "prefix", "/path/file.tar.gz", "NEW", "/path/NEW.tar.gz")]
+    #[case("replace", "prefix", "/path/file.tar.gz", "NEW", "/path/NEW.tar.gz")]
+    // Name
+    #[case("set", "name", "/path/file.txt", "NEW", "/path/NEW")]
+    #[case("replace", "name", "/path/file.txt", "NEW", "/path/NEW")]
+    #[case("set", "name", "/my/path/", "NEW", "/my/NEW")]
+    #[case("replace", "name", "/my/path/", "NEW", "/my/NEW")]
+    #[case("set", "name", "/my/path", "NEW", "/my/NEW")]
+    #[case("replace", "name", "/my/path", "NEW", "/my/NEW")]
+    // Disk - on Unix (no disk exists, no-op)
+    #[case("set", "disk", "/path/file.txt", "C", "/path/file.txt")]
+    #[case("replace", "disk", "/path/file.txt", "C", "/path/file.txt")]
+    // Disk - on Windows
+    #[case("set", "disk", r"C:\path\file.txt", "D", r"D:\path\file.txt")]
+    #[case("replace", "disk", r"C:\path\file.txt", "D", r"D:\path\file.txt")]
+    #[case("set", "disk", r"C:\path\file.txt", "d", r"d:\path\file.txt")]
+    #[case("replace", "disk", r"C:\path\file.txt", "d", r"d:\path\file.txt")]
+    #[case("set", "disk", r"\path\file.txt", "C", r"C:\path\file.txt")]
+    #[case("replace", "disk", r"\path\file.txt", "C", r"\path\file.txt")]
+    // URL components
+    #[case("set", "scheme", "https://example.com", "ftp", "ftp://example.com")]
+    #[case(
+        "set",
+        "port",
+        "https://example.com/path",
+        "8080",
+        "https://example.com:8080/path"
+    )]
+    #[case(
+        "set",
+        "frag",
+        "https://example.com/path",
+        "top",
+        "https://example.com/path#top"
+    )]
+    #[case(
+        "set",
+        "query",
+        "https://example.com/path",
+        "a=b",
+        "https://example.com/path?a=b"
+    )]
+    fn test_set_replace(
+        #[case] cmd: &str,
+        #[case] component: &str,
+        #[case] path: &str,
+        #[case] value: &str,
+        #[case] expected: &str,
+    ) {
+        pathmut(&[cmd, value, component, path])
+            .success()
+            .stdout(format!("{expected}\n"));
+    }
+
+    // =========================================================================
+    // Shorthand equivalence test - verifies `ext` == `get ext`
+    // =========================================================================
+    #[rstest]
+    #[case("ext")]
+    #[case("stem")]
+    #[case("prefix")]
+    #[case("name")]
+    fn test_shorthand_equals_get(#[case] component: &str) {
+        let paths = [
+            "/my/path/file.txt",
+            r"C:\path\file.txt",
+            "https://example.com/file.txt",
+        ];
+        for path in paths {
+            let get_out = pathmut_stdout(&["get", component, path]);
+            let short_out = pathmut_stdout(&[component, path]);
+            assert_eq!(
+                get_out, short_out,
+                "shorthand '{component}' should equal 'get {component}' for {path}"
+            );
+        }
+    }
+
+    // =========================================================================
+    // Is command tests
+    // =========================================================================
+    #[rstest]
+    #[case("relative", "/absolute/path", false)]
+    #[case("relative", "relative/path", true)]
+    #[case("relative", "file.txt", true)]
+    #[case("absolute", "/absolute/path", true)]
+    #[case("absolute", "relative/path", false)]
+    #[case("absolute", "file.txt", false)]
+    #[case("unix", "/unix/path", true)]
+    #[case("unix", "my/path", true)]
+    #[case("unix", r"C:\windows", false)]
+    #[case("unix", r"\my\path", false)]
+    #[case("windows", r"C:\windows", true)]
+    #[case("windows", r"\my\path", true)]
+    #[case("windows", "/unix/path", false)]
+    #[case("windows", "my/path", false)]
+    #[case("url", "https://example.com", true)]
+    #[case("url", "/not/a/url", false)]
+    fn test_is(#[case] question: &str, #[case] path: &str, #[case] expected: bool) {
+        let result = pathmut(&["is", question, path]);
+        if expected {
+            result.success();
+        } else {
+            result.failure();
+        }
+    }
+
     #[test]
-    fn parse_as_flags() {
+    fn test_is_print_flag() {
+        pathmut(&["is", "absolute", "-p", "/my/path/file.txt"])
+            .success()
+            .stdout("true\n");
+        pathmut(&["is", "absolute", "-p", "my/path/file.txt"])
+            .success()
+            .stdout("false\n");
+        pathmut(&["is", "absolute", "--print", "file.txt"])
+            .success()
+            .stdout("false\n");
+    }
+
+    #[test]
+    fn test_is_any_all_flags() {
+        // --any: success if ANY path matches
+        pathmut(&["is", "absolute", "--any", "/abs", "rel"]).success();
+        pathmut(&["is", "absolute", "--any", "rel1", "rel2"]).failure();
+        pathmut(&["is", "relative", "--any", "/abs", "rel"]).success();
+        pathmut(&["is", "relative", "--any", "/abs1", "/abs2"]).failure();
+
+        // --all: success only if ALL paths match
+        pathmut(&["is", "absolute", "--all", "/abs1", "/abs2"]).success();
+        pathmut(&["is", "absolute", "--all", "/abs", "rel"]).failure();
+        pathmut(&["is", "relative", "--all", "rel1", "rel2"]).success();
+        pathmut(&["is", "relative", "--all", "/abs", "rel"]).failure();
+
+        // conflict
+        pathmut(&["is", "--all", "--any", "absolute", "/path"]).failure();
+    }
+
+    #[test]
+    fn test_has_print_flag() {
+        pathmut(&["has", "ext", "-p", "/path/to.txt"])
+            .success()
+            .stdout("true\n");
+        pathmut(&["has", "-p", "ext", "/path/to.txt"])
+            .success()
+            .stdout("true\n");
+        pathmut(&["has", "-p", "ext", "/path/to"])
+            .success()
+            .stdout("false\n");
+    }
+
+    // =========================================================================
+    // Standalone tests - unique behaviors
+    // =========================================================================
+
+    #[test]
+    fn test_parse_as_flags() {
         // -x forces unix parsing, -w forces windows
         pathmut(&["-w", "get", "ext", "/path/to/file.txt"])
             .success()
@@ -285,10 +568,14 @@ mod test {
         pathmut(&["-x", "get", "ext", "C:\\path\\to\\file.txt"])
             .success()
             .stdout("txt\n");
+        // -u forces url parsing
+        pathmut(&["-u", "get", "scheme", "https://example.com"])
+            .success()
+            .stdout("https\n");
     }
 
     #[test]
-    fn depth() {
+    fn test_depth() {
         // linux absolute
         pathmut(&["depth", "/"]).success().stdout("0\n");
         pathmut(&["depth", "/path"]).success().stdout("1\n");
@@ -319,469 +606,8 @@ mod test {
             .stdout("2\n");
     }
 
-    mod is {
-        use super::*;
-
-        #[test]
-        fn relative() {
-            pathmut(&["is", "relative", "/my/path/file.txt"]).failure();
-            pathmut(&["is", "relative", "my/path/file.txt"]).success();
-            pathmut(&["is", "relative", "file.txt"]).success();
-        }
-
-        #[test]
-        fn relative_any() {
-            pathmut(&["is", "relative", "--any", "my/path/file.txt", "my/path"]).success();
-            pathmut(&["is", "relative", "--any", "/my/path/file.txt", "my/path"]).success();
-            pathmut(&["is", "relative", "--any", "/my/path/file.txt", "/my/path"]).failure();
-            pathmut(&["is", "relative", "--any", "my/path/file.txt"]).success();
-            pathmut(&["is", "relative", "--any", "/my/path/file.txt"]).failure();
-        }
-
-        #[test]
-        fn relative_all() {
-            pathmut(&["is", "relative", "--all", "my/path/file.txt", "my/path"]).success();
-            pathmut(&["is", "relative", "--all", "/my/path/file.txt", "my/path"]).failure();
-            pathmut(&["is", "relative", "--all", "/my/path/file.txt", "/my/path"]).failure();
-            pathmut(&["is", "relative", "--all", "my/path/file.txt"]).success();
-            pathmut(&["is", "relative", "--all", "/my/path/file.txt"]).failure();
-        }
-
-        #[test]
-        fn absolute() {
-            pathmut(&["is", "absolute", "/my/path/file.txt"]).success();
-            pathmut(&["is", "absolute", "my/path/file.txt"]).failure();
-            pathmut(&["is", "absolute", "file.txt"]).failure();
-        }
-
-        #[test]
-        fn absolute_any() {
-            pathmut(&["is", "absolute", "--any", "my/path/file.txt", "my/path"]).failure();
-            pathmut(&["is", "absolute", "--any", "/my/path/file.txt", "my/path"]).success();
-            pathmut(&["is", "absolute", "--any", "/my/path/file.txt", "/my/path"]).success();
-            pathmut(&["is", "absolute", "--any", "my/path/file.txt"]).failure();
-            pathmut(&["is", "absolute", "--any", "/my/path/file.txt"]).success();
-        }
-
-        #[test]
-        fn absolute_all() {
-            pathmut(&["is", "absolute", "--all", "my/path/file.txt", "my/path"]).failure();
-            pathmut(&["is", "absolute", "--all", "/my/path/file.txt", "my/path"]).failure();
-            pathmut(&["is", "absolute", "--all", "/my/path/file.txt", "/my/path"]).success();
-            pathmut(&["is", "absolute", "--all", "my/path/file.txt"]).failure();
-            pathmut(&["is", "absolute", "--all", "/my/path/file.txt"]).success();
-        }
-
-        #[test]
-        fn absolute_print() {
-            pathmut(&["is", "absolute", "-p", "/my/path/file.txt"])
-                .success()
-                .stdout("true\n");
-            pathmut(&["is", "absolute", "-p", "my/path/file.txt"])
-                .success()
-                .stdout("false\n");
-            pathmut(&["is", "absolute", "--print", "file.txt"])
-                .success()
-                .stdout("false\n");
-        }
-
-        #[test]
-        fn any_all_conflict() {
-            pathmut(&["is", "--all", "--any", "absolute", "/path/to/file.txt"]).failure();
-        }
-
-        #[test]
-        fn windows() {
-            pathmut(&["is", "windows", r"C:\my\path"]).success();
-            pathmut(&["is", "unix", r"C:\my\path"]).failure();
-            pathmut(&["is", "windows", r"\my\path"]).success();
-            pathmut(&["is", "unix", r"\my\path"]).failure();
-
-            // TODO: Make my own heuristic, I guess
-            // pathmut(&["is", "windows", r"my\path"]).success();
-            // pathmut(&["is", "unix", r"my\path"]).failure();
-        }
-
-        #[test]
-        fn unix() {
-            pathmut(&["is", "windows", r"/my/path"]).failure();
-            pathmut(&["is", "unix", r"/my/path"]).success();
-            pathmut(&["is", "windows", r"my/path"]).failure();
-            pathmut(&["is", "unix", r"my/path"]).success();
-        }
-    }
-
-    mod default {
-        use super::*;
-
-        #[test]
-        fn ext() {
-            pathmut(&["ext", "/my/path/file.txt"])
-                .success()
-                .stdout("txt\n");
-            pathmut(&["ext", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("gz\n");
-        }
-
-        #[test]
-        fn stem() {
-            pathmut(&["stem", "/my/path/file.txt"])
-                .success()
-                .stdout("file\n");
-            pathmut(&["stem", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("file.tar\n");
-        }
-
-        #[test]
-        fn prefix() {
-            pathmut(&["prefix", "/my/path/file.txt"])
-                .success()
-                .stdout("file\n");
-            pathmut(&["prefix", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("file\n");
-        }
-
-        #[test]
-        fn name() {
-            pathmut(&["name", "/my/path/file.txt"])
-                .success()
-                .stdout("file.txt\n");
-            pathmut(&["name", "/my/path/dir"]).success().stdout("dir\n");
-        }
-
-        #[test]
-        fn disk() {
-            pathmut(&["disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("C\n");
-            pathmut(&["disk", "\\path\\to\\file.txt"])
-                .success()
-                .stdout("\n");
-            pathmut(&["disk", "d:\\path\\to\\file.txt"])
-                .success()
-                .stdout("D\n"); // FIXME: this performs capitalization on my behalf, which isn't what I want
-            pathmut(&["disk", "/linux/path"]).success().stdout("\n");
-        }
-    }
-
-    mod has {
-        use super::*;
-
-        #[test]
-        fn ext() {
-            pathmut(&["has", "ext", "/my/path/file.txt"]).success();
-            pathmut(&["has", "ext", "/my/path/file.tar.gz"]).success();
-            pathmut(&["has", "ext", "/my/path/file"]).failure();
-        }
-
-        #[test]
-        fn stem() {
-            pathmut(&["has", "stem", "/my/path/file.txt"]).success();
-            pathmut(&["has", "stem", "/my/path/file.tar.gz"]).success();
-            pathmut(&["has", "stem", "/my/path"]).success();
-            pathmut(&["has", "stem", "/"]).failure();
-        }
-
-        #[test]
-        fn prefix() {
-            pathmut(&["has", "prefix", "/my/path/file.txt"]).success();
-            pathmut(&["has", "prefix", "/my/path/file.tar.gz"]).success();
-            pathmut(&["has", "prefix", "/my/path"]).success();
-            pathmut(&["has", "prefix", "/"]).failure();
-        }
-
-        #[test]
-        fn name() {
-            pathmut(&["has", "name", "/my/path/file.txt"]).success();
-            pathmut(&["has", "name", "/my/path/dir"]).success();
-            pathmut(&["has", "name", "/"]).failure();
-        }
-
-        #[test]
-        fn disk() {
-            pathmut(&["has", "disk", "/path/to/file.txt"]).failure();
-            pathmut(&["has", "disk", "C:\\path\\to\\file.txt"]).success();
-            pathmut(&["has", "disk", "d:\\path\\to\\file.txt"]).success();
-            pathmut(&["has", "disk", "\\path\\to\\file.txt"]).failure();
-        }
-
-        #[test]
-        fn print() {
-            pathmut(&["has", "ext", "-p", "/path/to.txt"])
-                .success()
-                .stdout("true\n");
-            pathmut(&["has", "-p", "ext", "/path/to.txt"])
-                .success()
-                .stdout("true\n");
-            pathmut(&["has", "-p", "ext", "/path/to"])
-                .success()
-                .stdout("false\n");
-        }
-    }
-
-    mod get {
-        use super::*;
-
-        #[test]
-        fn ext() {
-            pathmut(&["get", "ext", "/my/path/file.txt"])
-                .success()
-                .stdout("txt\n");
-            pathmut(&["get", "ext", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("gz\n");
-        }
-
-        #[test]
-        fn stem() {
-            pathmut(&["get", "stem", "/my/path/file.txt"])
-                .success()
-                .stdout("file\n");
-            pathmut(&["get", "stem", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("file.tar\n");
-        }
-
-        #[test]
-        fn prefix() {
-            pathmut(&["get", "prefix", "/my/path/file.txt"])
-                .success()
-                .stdout("file\n");
-            pathmut(&["get", "prefix", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("file\n");
-        }
-
-        #[test]
-        fn name() {
-            pathmut(&["get", "name", "/my/path/file.txt"])
-                .success()
-                .stdout("file.txt\n");
-            pathmut(&["get", "name", "/my/path/dir"])
-                .success()
-                .stdout("dir\n");
-        }
-
-        #[test]
-        fn disk() {
-            pathmut(&["get", "disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("C\n");
-            pathmut(&["get", "disk", "\\path\\to\\file.txt"])
-                .success()
-                .stdout("\n");
-            pathmut(&["get", "disk", "d:\\path\\to\\file.txt"])
-                .success()
-                .stdout("D\n"); // FIXME: this performs capitalization on my behalf, which isn't what I want
-            pathmut(&["get", "disk", "/linux/path"])
-                .success()
-                .stdout("\n");
-        }
-    }
-
-    mod delete {
-        use super::*;
-
-        // todo: test aliases
-
-        #[test]
-        fn ext() {
-            pathmut(&["delete", "ext", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/file\n");
-        }
-
-        #[test]
-        fn stem() {
-            pathmut(&["delete", "stem", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/txt\n");
-            pathmut(&["delete", "stem", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/gz\n");
-        }
-
-        #[test]
-        fn prefix() {
-            pathmut(&["delete", "prefix", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/.tar.gz\n");
-            pathmut(&["delete", "prefix", "/my/path/file"])
-                .success()
-                .stdout("/my/path/\n");
-            pathmut(&["delete", "prefix", "/my"])
-                .success()
-                .stdout("/\n");
-            pathmut(&["delete", "prefix", "/"]).success().stdout("/\n");
-        }
-
-        #[test]
-        fn name() {
-            pathmut(&["delete", "name", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path\n");
-        }
-
-        #[test]
-        fn disk() {
-            pathmut(&["delete", "disk", "/path/to/file.txt"])
-                .success()
-                .stdout("/path/to/file.txt\n");
-            pathmut(&["delete", "disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("\\path\\to\\file.txt\n");
-            pathmut(&["delete", "disk", "d:\\path\\to\\file.txt"])
-                .success()
-                .stdout("\\path\\to\\file.txt\n");
-            pathmut(&["delete", "disk", "\\path\\to\\file.txt"])
-                .success()
-                .stdout("\\path\\to\\file.txt\n");
-        }
-    }
-
-    mod replace {
-        use super::*;
-
-        #[test]
-        fn ext() {
-            pathmut(&["replace", "sh", "ext", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/file.sh\n");
-            pathmut(&["replace", "sh", "ext", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/file.tar.sh\n");
-            pathmut(&["replace", "sh", "ext", "/my/path/file"])
-                .success()
-                .stdout("/my/path/file\n");
-        }
-
-        #[test]
-        fn stem() {
-            pathmut(&["replace", "main", "stem", "/my/path/file"])
-                .success()
-                .stdout("/my/path/main.file\n");
-            pathmut(&["replace", "main", "stem", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/main.txt\n");
-            pathmut(&["replace", "main", "stem", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/main.gz\n");
-        }
-
-        #[test]
-        fn prefix() {
-            pathmut(&["replace", "main", "prefix", "/my/path/file"])
-                .success()
-                .stdout("/my/path/main.file\n");
-            pathmut(&["replace", "main", "prefix", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/main.txt\n");
-            pathmut(&["replace", "main", "prefix", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/main.tar.gz\n");
-        }
-
-        #[test]
-        fn name() {
-            pathmut(&["replace", "main", "name", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/main\n");
-            pathmut(&["replace", "main", "name", "/my/path/"])
-                .success()
-                .stdout("/my/main\n");
-            pathmut(&["replace", "main", "name", "/my/path"])
-                .success()
-                .stdout("/my/main\n");
-        }
-
-        #[test]
-        fn disk() {
-            pathmut(&["replace", "C", "disk", "/path/to/file.txt"])
-                .success()
-                .stdout("/path/to/file.txt\n");
-            pathmut(&["replace", "C", "disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("C:\\path\\to\\file.txt\n");
-            pathmut(&["replace", "d", "disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("d:\\path\\to\\file.txt\n");
-            pathmut(&["replace", "C", "disk", "\\path\\to\\file.txt"])
-                .success()
-                .stdout("\\path\\to\\file.txt\n");
-        }
-    }
-
-    mod set {
-        use super::*;
-
-        #[test]
-        fn ext() {
-            pathmut(&["set", "sh", "ext", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/file.sh\n");
-            pathmut(&["set", "sh", "ext", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/file.tar.sh\n");
-            pathmut(&["set", "sh", "ext", "/my/path/file"])
-                .success()
-                .stdout("/my/path/file.sh\n");
-        }
-
-        #[test]
-        fn stem() {
-            pathmut(&["set", "main", "stem", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/main.txt\n");
-            pathmut(&["set", "main", "stem", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/main.gz\n");
-        }
-
-        #[test]
-        fn prefix() {
-            pathmut(&["set", "main", "prefix", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/main.txt\n");
-            pathmut(&["set", "main", "prefix", "/my/path/file.tar.gz"])
-                .success()
-                .stdout("/my/path/main.tar.gz\n");
-        }
-
-        #[test]
-        fn name() {
-            pathmut(&["set", "main", "name", "/my/path/file.txt"])
-                .success()
-                .stdout("/my/path/main\n");
-            pathmut(&["set", "main", "name", "/my/path/"])
-                .success()
-                .stdout("/my/main\n");
-            pathmut(&["set", "main", "name", "/my/path"])
-                .success()
-                .stdout("/my/main\n");
-        }
-
-        #[test]
-        fn disk() {
-            pathmut(&["set", "C", "disk", "/path/to/file.txt"])
-                .success()
-                .stdout("/path/to/file.txt\n");
-            pathmut(&["set", "C", "disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("C:\\path\\to\\file.txt\n");
-            pathmut(&["set", "d", "disk", "C:\\path\\to\\file.txt"])
-                .success()
-                .stdout("d:\\path\\to\\file.txt\n");
-            pathmut(&["set", "C", "disk", "\\path\\to\\file.txt"])
-                .success()
-                .stdout("C:\\path\\to\\file.txt\n");
-        }
-    }
-
     #[test]
-    fn convert() {
+    fn test_convert() {
         pathmut(&["convert", "unix", "my/path/file.txt"])
             .success()
             .stdout("my/path/file.txt\n");
@@ -800,7 +626,7 @@ mod test {
     }
 
     #[test]
-    fn from_stdin() {
+    fn test_from_stdin() {
         Command::cargo_bin("pathmut")
             .unwrap()
             .args(["get", "ext"])
@@ -811,14 +637,14 @@ mod test {
     }
 
     #[test]
-    fn help_default() {
+    fn test_help_default() {
         pathmut(&[])
             .failure()
             .stderr(predicate::str::contains("Print help information"));
     }
 
     #[test]
-    fn multiple_paths() {
+    fn test_multiple_paths() {
         pathmut(&["get", "ext", "file.txt", "another.png"])
             .success()
             .stdout("txt\npng\n");
@@ -840,19 +666,6 @@ mod test {
         ])
         .success()
         .stdout("path/to/blah.txt\njust/blah.png\n");
-    }
-
-    #[test]
-    fn windows() {
-        pathmut(&["get", "ext", r"C:\Users\username\file.txt"])
-            .success()
-            .stdout("txt\n");
-        pathmut(&["get", "stem", r"C:\Users\username\file.txt"])
-            .success()
-            .stdout("file\n");
-        pathmut(&["get", "name", r"C:\Users\username\file.txt"])
-            .success()
-            .stdout("file.txt\n");
     }
 
     /*
