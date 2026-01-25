@@ -18,6 +18,18 @@ pub enum HostKind {
     Ipv6(String),        // "[::1]" (with brackets for serialization)
 }
 
+/// URL information extracted from a URL path.
+#[derive(Debug, Clone)]
+pub struct UrlInfo {
+    pub scheme: Option<String>,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub user: Option<String>,
+    pub pass: Option<String>,
+    pub query: Option<String>,
+    pub fragment: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Path {
     segments: Vec<Segment>,
@@ -534,6 +546,63 @@ impl TryFrom<&str> for Component {
 }
 
 impl Path {
+    /// Returns the path segments as strings.
+    pub fn segments(&self) -> Vec<String> {
+        self.segments.iter().map(|s| s.0.clone()).collect()
+    }
+
+    /// Returns whether this path has a root component.
+    pub fn has_root(&self) -> bool {
+        match &self.kind {
+            PathKind::Unix { root } => *root,
+            PathKind::Windows { root, .. } => *root,
+            PathKind::Url { .. } => false,
+        }
+    }
+
+    /// Returns the Windows prefix string if this is a Windows path with a prefix.
+    pub fn windows_prefix(&self) -> Option<String> {
+        match &self.kind {
+            PathKind::Windows {
+                prefix: Some(p), ..
+            } => Some(p.to_string()),
+            _ => None,
+        }
+    }
+
+    /// Returns URL info if this is a URL path.
+    pub fn url_info(&self) -> Option<UrlInfo> {
+        match &self.kind {
+            PathKind::Url {
+                scheme,
+                username,
+                password,
+                host,
+                port,
+                query_params,
+                fragment,
+            } => Some(UrlInfo {
+                scheme: scheme.clone(),
+                host: match host {
+                    HostKind::Domain(parts) if parts.is_empty() => None,
+                    HostKind::Domain(parts) => Some(parts.join(".")),
+                    HostKind::Ipv4(ip) => Some(ip.to_string()),
+                    HostKind::Ipv6(ip) => Some(format!("[{}]", ip)),
+                },
+                port: *port,
+                user: username.clone(),
+                pass: password.clone(),
+                query: if query_params.is_empty() {
+                    None
+                } else {
+                    Some(query_params.join("&"))
+                },
+                fragment: fragment.clone(),
+            }),
+            _ => None,
+        }
+    }
+
     /// Returns the depth of the path.
     /// For absolute paths (with root), this is the number of segments.
     /// For relative paths (without root), this is segments - 1 (treating first segment as depth 0).

@@ -205,7 +205,13 @@ fn info_command() -> Command {
     Command::new("info")
         .about("Print information about paths")
         .arg_required_else_help(true)
-        .args([paths_arg()])
+        .args([
+            paths_arg(),
+            Arg::new("json")
+                .long("json")
+                .help("Output as JSON instead of YAML")
+                .action(ArgAction::SetTrue),
+        ])
 }
 
 fn depth_command() -> Command {

@@ -1,4 +1,5 @@
 use clap::ArgMatches;
+use serde::Serialize;
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Read};
@@ -6,6 +7,104 @@ use std::process::ExitCode;
 
 use pathmut::path::{Component, Path};
 use pathmut::{build_app, get_command, Command, PathKind, Question};
+
+// Info command output structs
+#[derive(Serialize)]
+struct PathInfo {
+    segments: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unix: Option<UnixInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    windows: Option<WindowsInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<UrlInfoOutput>,
+}
+
+#[derive(Serialize)]
+struct UnixInfo {
+    root: bool,
+}
+
+#[derive(Serialize)]
+struct WindowsInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prefix: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disk: Option<String>,
+    root: bool,
+}
+
+#[derive(Serialize)]
+struct UrlInfoOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scheme: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pass: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    query: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fragment: Option<String>,
+}
+
+impl PathInfo {
+    fn from_path(path: &Path) -> Self {
+        let segments = path.segments();
+
+        if path.is_url() {
+            let url_info = path.url_info().unwrap();
+            PathInfo {
+                segments,
+                unix: None,
+                windows: None,
+                url: Some(UrlInfoOutput {
+                    scheme: url_info.scheme,
+                    host: url_info.host,
+                    port: url_info.port,
+                    user: url_info.user,
+                    pass: url_info.pass,
+                    query: url_info.query,
+                    fragment: url_info.fragment,
+                }),
+            }
+        } else if path.is_windows() {
+            let prefix = path.windows_prefix();
+            let disk = {
+                let d = path.get(Component::Disk);
+                if d.is_empty() {
+                    None
+                } else {
+                    Some(d)
+                }
+            };
+            PathInfo {
+                segments,
+                unix: None,
+                windows: Some(WindowsInfo {
+                    prefix,
+                    disk,
+                    root: path.has_root(),
+                }),
+                url: None,
+            }
+        } else {
+            // Unix
+            PathInfo {
+                segments,
+                unix: Some(UnixInfo {
+                    root: path.has_root(),
+                }),
+                windows: None,
+                url: None,
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 enum ParseAs {
@@ -73,56 +172,13 @@ fn main() -> ExitCode {
                     }
                 }
                 Command::Info => {
+                    let use_json = cmd_args.get_flag("json");
                     for path in parse_paths(cmd_args, parse_as) {
-                        let serialized = path.serialize();
-                        println!("{}", serialized);
-                        println!(
-                            "      type: {}",
-                            if path.is_url() {
-                                "url"
-                            } else if path.is_unix() {
-                                "unix"
-                            } else {
-                                "windows"
-                            }
-                        );
-
-                        // Show file components
-                        for (component, name) in [
-                            (Component::Name, "name"),
-                            (Component::FilePrefix, "prefix"),
-                            (Component::Stem, "stem"),
-                            (Component::Extension, "extension"),
-                        ] {
-                            let value = path.get(component);
-                            if !value.is_empty() {
-                                println!("{name:>10}: {}", value);
-                            }
-                        }
-
-                        // Show URL-specific components if it's a URL
-                        if path.is_url() {
-                            for (component, name) in [
-                                (Component::Scheme, "scheme"),
-                                (Component::Host, "host"),
-                                (Component::Port, "port"),
-                                (Component::Path, "path"),
-                                (Component::Queries, "query"),
-                                (Component::Fragment, "fragment"),
-                            ] {
-                                let value = path.get(component);
-                                if !value.is_empty() {
-                                    println!("{name:>10}: {}", value);
-                                }
-                            }
-                        }
-
-                        // Show Windows-specific components
-                        if path.is_windows() {
-                            let disk = path.get(Component::Disk);
-                            if !disk.is_empty() {
-                                println!("{:>10}: {}", "disk", disk);
-                            }
+                        let info = PathInfo::from_path(&path);
+                        if use_json {
+                            println!("{}", serde_json::to_string_pretty(&info).unwrap());
+                        } else {
+                            print!("{}", serde_yaml::to_string(&info).unwrap());
                         }
                     }
                 }
